@@ -1,6 +1,15 @@
 ---
 name: xp-clean-code
-description: Apply Extreme Programming (XP) and Clean Code discipline to software development. Use this skill whenever writing, reviewing, or extending production code — especially when the task involves implementing new behaviour, refactoring, adding tests, or defining acceptance criteria. Triggers on phrases like "implement feature", "add tests", "refactor", "write a spec", "acceptance criteria", "Given/When/Then", "TDD", "BDD", or any request to build something non-trivial. Composes cleanly with Karpathy-style behavioural guidelines: where those address how an agent should reason, this skill addresses how code should be built.
+description: >-
+  Apply Extreme Programming (XP) and Clean Code discipline to software
+  development. Use this skill whenever writing, reviewing, or extending
+  production code — especially when the task involves implementing new
+  behaviour, refactoring, adding tests, or defining acceptance criteria.
+  Triggers on phrases like "implement feature", "add tests", "refactor",
+  "write a spec", "acceptance criteria", "Given/When/Then", "TDD", "BDD",
+  or any request to build something non-trivial. Composes cleanly with
+  Karpathy-style behavioural guidelines: where those address how an agent
+  should reason, this skill addresses how code should be built.
 ---
 
 # XP + Clean Code Skill
