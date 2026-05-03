@@ -30,15 +30,28 @@ It encodes seven principles:
 
 **As a Claude Code plugin (recommended — applies across all projects):**
 
-```bash
-/plugin install xp-clean-code.skill
+Add the repo as a plugin source in `~/.claude/settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "xp-clean-code": {
+      "source": {
+        "source": "github",
+        "repo": "HivemindTechnologies/xp-clean-code"
+      }
+    }
+  }
+}
 ```
+
+Then open Claude Code and run `/plugin` to browse and install.
 
 **Per-project (append to an existing CLAUDE.md):**
 
 ```bash
 echo "" >> CLAUDE.md
-curl https://raw.githubusercontent.com/hivemind-tech/xp-clean-code/main/SKILL.md >> CLAUDE.md
+curl https://raw.githubusercontent.com/HivemindTechnologies/xp-clean-code/main/skills/xp-clean-code/SKILL.md >> CLAUDE.md
 ```
 
 -----
@@ -47,10 +60,14 @@ curl https://raw.githubusercontent.com/hivemind-tech/xp-clean-code/main/SKILL.md
 
 ```
 xp-clean-code/
-├── SKILL.md                          # Core principles — loaded by Claude Code
-└── references/
-    ├── testing-patterns.md           # Framework examples: Scala, Java, Python, PySpark, TypeScript
-    └── scenario-examples.md          # Worked BDD scenarios across common problem types
+├── .claude-plugin/
+│   └── plugin.json                   # Plugin manifest
+└── skills/
+    └── xp-clean-code/
+        ├── SKILL.md                  # Core principles — loaded by Claude Code
+        └── references/
+            ├── testing-patterns.md   # Framework examples: Scala, Java, Python, PySpark, TypeScript
+            └── scenario-examples.md  # Worked BDD scenarios across common problem types
 ```
 
 The reference files are loaded on demand. `SKILL.md` stays lean in context; the detail is there when Claude needs it.
