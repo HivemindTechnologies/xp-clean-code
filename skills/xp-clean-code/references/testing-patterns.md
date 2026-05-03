@@ -195,7 +195,10 @@ static Stream<Arguments> invalidQuantities() {
 
 ```python
 # Scenario: Given a stream processor, When a malformed message arrives, Then it is sent to dead-letter
-def test_malformed_message_goes_to_dead_letter(processor, dead_letter_queue):
+def test_malformed_message_goes_to_dead_letter(
+    processor: StreamProcessor,
+    dead_letter_queue: DeadLetterQueue,
+) -> None:
     # Given
     message = Message(payload=b"not-valid-json", topic="orders")
 
@@ -210,14 +213,16 @@ def test_malformed_message_goes_to_dead_letter(processor, dead_letter_queue):
 **Fixtures as Given:**
 ```python
 @pytest.fixture
-def running_pipeline(spark_session):
+def running_pipeline(spark_session: SparkSession) -> SparkStreamingPipeline:
     """A pipeline that has processed one checkpoint."""
     pipeline = SparkStreamingPipeline(spark_session)
     pipeline.start()
     pipeline.await_checkpoint(1)
     return pipeline
 
-def test_pipeline_recovers_from_restart(running_pipeline):
+def test_pipeline_recovers_from_restart(
+    running_pipeline: SparkStreamingPipeline,
+) -> None:
     # Given: running_pipeline fixture (already at checkpoint 1)
     # When
     running_pipeline.stop()
@@ -230,12 +235,16 @@ def test_pipeline_recovers_from_restart(running_pipeline):
 **Parametrize for scenario tables:**
 ```python
 @pytest.mark.parametrize("status,expected_topic", [
-    ("APPROVED", "orders.approved"),
-    ("REJECTED", "orders.rejected"),
-    ("PENDING",  "orders.pending"),
+    (OrderStatus.APPROVED, "orders.approved"),
+    (OrderStatus.REJECTED, "orders.rejected"),
+    (OrderStatus.PENDING,  "orders.pending"),
 ])
-def test_order_routed_to_correct_topic(order_router, status, expected_topic):
-    order = Order(id="O-1", status=status)
+def test_order_routed_to_correct_topic(
+    order_router: OrderRouter,
+    status: OrderStatus,
+    expected_topic: str,
+) -> None:
+    order = Order(id=OrderId("O-1"), status=status)
     order_router.route(order)
     assert order_router.last_topic == expected_topic
 ```
@@ -247,7 +256,7 @@ def test_order_routed_to_correct_topic(order_router, status, expected_topic):
 Test Spark logic against small in-memory DataFrames. Never test against a real cluster in unit tests.
 
 ```python
-def test_deduplication_removes_duplicate_event_ids(spark):
+def test_deduplication_removes_duplicate_event_ids(spark: SparkSession) -> None:
     # Given
     raw = spark.createDataFrame([
         ("evt-1", "order.created", "2024-01-01T10:00:00"),
@@ -265,7 +274,7 @@ def test_deduplication_removes_duplicate_event_ids(spark):
 
 **Testing watermark + windowing logic:**
 ```python
-def test_late_events_outside_watermark_are_dropped(spark):
+def test_late_events_outside_watermark_are_dropped(spark: SparkSession) -> None:
     # Given — events with a 10-minute watermark, late event at -15min
     events = spark.createDataFrame([
         ("e1", timestamp("10:00")),
