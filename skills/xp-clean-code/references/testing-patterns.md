@@ -4,6 +4,127 @@ Framework-specific patterns for the RED → GREEN → CLEAN cycle.
 
 ---
 
+## Scala (ScalaTest + GivenWhenThen)
+
+ScalaTest's `GivenWhenThen` trait adds `given`, `when`, `andWhen`, `then`, and `and` methods that print labelled steps to the test report, keeping the prose scenario and the executable assertion in the same place.
+
+**FeatureSpec — acceptance-level scenarios:**
+```scala
+import org.scalatest.featurespec.AnyFeatureSpec
+import org.scalatest.GivenWhenThen
+import org.scalatest.matchers.should.Matchers
+
+class OrderPlacementSpec extends AnyFeatureSpec with GivenWhenThen with Matchers {
+
+  Feature("Order placement") {
+
+    Scenario("Placing a valid order decrements stock") {
+      given("a product with 10 units in stock")
+      val product = Product(sku = "SKU-001", stock = 10)
+
+      and("an order for 3 units")
+      val order = Order(product, quantity = 3)
+
+      when("the order is placed")
+      order.place()
+
+      then("the stock level is 7")
+      product.stockLevel shouldBe 7
+    }
+
+    Scenario("Placing an order with insufficient stock is rejected") {
+      given("a product with 2 units in stock")
+      val product = Product(sku = "SKU-001", stock = 2)
+
+      and("an order for 5 units")
+      val order = Order(product, quantity = 5)
+
+      when("the order is placed")
+      then("an InsufficientStockException is raised")
+      an[InsufficientStockException] should be thrownBy order.place()
+
+      and("the stock level is unchanged")
+      product.stockLevel shouldBe 2
+    }
+  }
+}
+```
+
+**FlatSpec — unit-level, one scenario per `it` block:**
+```scala
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.GivenWhenThen
+import org.scalatest.matchers.should.Matchers
+
+class PaymentServiceSpec extends AnyFlatSpec with GivenWhenThen with Matchers {
+
+  "PaymentService" should "keep order PENDING when the card is expired" in {
+    given("an order in PENDING state with an expired card")
+    val order   = Order(id = "O-1", status = Pending)
+    val payment = Payment(card = expiredCard())
+
+    when("the payment is processed")
+    val result = PaymentService.process(order, payment)
+
+    then("the order remains PENDING")
+    result.orderStatus shouldBe Pending
+
+    and("the error code is CARD_EXPIRED")
+    result.errorCode shouldBe Some(CardExpired)
+  }
+
+  it should "schedule a retry when the gateway times out" in {
+    given("an order in PENDING state")
+    val order = Order(id = "O-2", status = Pending)
+
+    and("a gateway that times out after 5 seconds")
+    val gateway = TimingOutGateway(timeoutSeconds = 5)
+
+    when("the payment is processed")
+    val result = PaymentService.process(order, Payment(validCard()), gateway)
+
+    then("the order remains PENDING")
+    result.orderStatus shouldBe Pending
+
+    and("a retry is scheduled for 60 seconds later")
+    result.scheduledRetry shouldBe Some(RetryAfter(seconds = 60))
+  }
+}
+```
+
+**Table-driven / parameterised with TableDrivenPropertyChecks:**
+```scala
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.GivenWhenThen
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.prop.TableDrivenPropertyChecks.*
+
+class DiscountSpec extends AnyFlatSpec with GivenWhenThen with Matchers {
+
+  private val loyaltyTiers = Table(
+    ("tier",     "orderTotal", "expectedDiscount"),
+    (Standard,   BigDecimal(100), BigDecimal(0)),
+    (Gold,       BigDecimal(100), BigDecimal(10)),
+    (Platinum,   BigDecimal(100), BigDecimal(20)),
+  )
+
+  "DiscountCalculator" should "apply the correct discount per loyalty tier" in {
+    forAll(loyaltyTiers) { (tier, orderTotal, expectedDiscount) =>
+      given(s"a $tier customer with an order total of €$orderTotal")
+      val customer = Customer(loyaltyTier = tier)
+
+      when("the discount is calculated")
+      val discount = DiscountCalculator.calculate(customer, orderTotal)
+
+      then(s"the discount is €$expectedDiscount")
+      discount shouldBe expectedDiscount
+    }
+  }
+}
+```
+
+---
+
 ## Java (JUnit 5 + AssertJ)
 
 ```java
