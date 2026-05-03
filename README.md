@@ -6,7 +6,7 @@ A Claude Code skill that brings Extreme Programming and Clean Code discipline to
 
 ## About Hivemind Technologies
 
-At [Hivemind Technologies](https://hivemind.tech), we build scalabe data platforms and machine learning systems for finance, energy and mobility sectors. Our engineering culture is rooted in the belief that software quality is not a trade-off against delivery speed — it is what makes sustained delivery possible. We practice test-first development, design through small increments, and treat code clarity as a first-class concern. This skill is a direct expression of those values, made available for AI coding agents.
+At [Hivemind Technologies](https://hivemindtechnologies.com), we build scalabe data platforms and machine learning systems for finance, energy and mobility sectors. Our engineering culture is rooted in the belief that software quality is not a trade-off against delivery speed — it is what makes sustained delivery possible. We practice test-first development, design through small increments, and treat code clarity as a first-class concern. This skill is a direct expression of those values, made available for AI coding agents.
 
 -----
 
