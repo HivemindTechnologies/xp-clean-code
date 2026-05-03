@@ -9,8 +9,9 @@ description: >-
   "implement feature", "add tests", "refactor", "write a spec", "acceptance
   criteria", "Given/When/Then", "TDD", "BDD", "domain model", "value
   object", "aggregate", "pure function", "side effect", "referential
-  transparency", "idempotent", "monad", "Either", "Option", or any request
-  to build something non-trivial. Composes cleanly with Karpathy-style
+  transparency", "idempotent", "monad", "Either", "Option", "type hint",
+  "type annotation", "mypy", "pyright", or any request to build something
+  non-trivial. Composes cleanly with Karpathy-style
   behavioural guidelines: where those address how an agent should reason,
   this skill addresses how code should be built.
 ---
@@ -329,6 +330,72 @@ def processPayment(order: Order, card: CardNumber): Either[PaymentError, Receipt
 
 The happy path reads linearly. Error handling is structural, not scattered across catch blocks.
 
+#### Declarative types in dynamically typed languages
+
+Type annotations in Python and similar languages are not enforced at runtime, but they are a first-class requirement. They are the machine-readable contract of every function — enabling static analysis, IDE support, and early error detection via mypy or pyright. An unannotated function is a build failure, not a style issue. Run `mypy --strict` or `pyright` in CI.
+
+**Every function signature must be fully annotated:**
+
+```python
+# Bad — reader must trace the body to understand what flows in and out
+def calculate_discount(customer, order_total):
+    ...
+
+# Good — contract is visible at the call site
+def calculate_discount(customer: Customer, order_total: Money) -> Discount:
+    ...
+```
+
+**Use `NewType` for domain identifiers — never raw primitives:**
+
+```python
+from typing import NewType
+from decimal import Decimal
+
+OrderId    = NewType("OrderId", str)
+CustomerId = NewType("CustomerId", str)
+
+# The type system now rejects passing a CustomerId where OrderId is expected
+def find_order(order_id: OrderId) -> Optional[Order]: ...
+```
+
+This is the Python expression of *value objects over primitives* (Principle 6). A `NewType` wrapper is zero-cost at runtime but catches entire classes of argument-order bugs statically.
+
+**Use `@dataclass(frozen=True)` for value objects:**
+
+```python
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Money:
+    amount: Decimal
+    currency: str
+
+@dataclass(frozen=True)
+class Order:
+    id: OrderId
+    customer_id: CustomerId
+    total: Money
+    status: OrderStatus
+```
+
+`frozen=True` enforces immutability at runtime and signals value-object intent. Never use plain `dict` for structured domain data.
+
+**Parameterise all collections; declare optionality explicitly:**
+
+```python
+# Bad
+def get_orders(customer_id) -> list:
+    ...
+
+# Good
+def get_orders(customer_id: CustomerId) -> list[Order]:
+    ...
+
+def find_customer(customer_id: CustomerId) -> Optional[Customer]:
+    ...
+```
+
 ---
 
 ## Interaction with Other Guidelines
@@ -365,6 +432,7 @@ Immutability:       Default to val / frozen / record; mutation requires justific
 Effects:            Push I/O to the boundary; model with Option / Either / IO
 Composition:        map/flatMap over mutation; pipelines over sequential statements
 Idempotency:        Write a scenario for double-application of every state transition
+Typing:             Annotate every signature in dynamic languages; unannotated = build failure
 
 Comments:           Why, never what
 ```
