@@ -51,7 +51,7 @@ Then open Claude Code and run `/plugin` to browse and install.
 
 ```bash
 echo "" >> CLAUDE.md
-curl https://raw.githubusercontent.com/HivemindTechnologies/xp-clean-code/main/skills/xp-clean-code/SKILL.md >> CLAUDE.md
+curl https://raw.githubusercontent.com/HivemindTechnologies/xp-clean-code/main/plugins/xp-clean-code/skills/xp-clean-code/SKILL.md >> CLAUDE.md
 ```
 
 -----
@@ -59,7 +59,7 @@ curl https://raw.githubusercontent.com/HivemindTechnologies/xp-clean-code/main/s
 ## What’s included
 
 ```
-xp-clean-code/
+plugins/xp-clean-code/               # plugin root
 ├── .claude-plugin/
 │   └── plugin.json                   # Plugin manifest
 └── skills/
