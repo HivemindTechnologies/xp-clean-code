@@ -1,0 +1,5 @@
+{
+  "name": "pr-validation",
+  "description": "Pull request validation for purity, idempotency, and BDD scenario coverage",
+  "version": "1.0.0"
+}

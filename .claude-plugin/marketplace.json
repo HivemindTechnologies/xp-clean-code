@@ -13,6 +13,11 @@
       "name": "xp-clean-code",
       "source": "./plugins/xp-clean-code",
       "description": "XP oriented and clean code guidelines for gen AI assisted coding with claude code"
+    },
+    {
+      "name": "pr-validation",
+      "source": "./plugins/pr-validation",
+      "description": "Pull request validation for function purity, idempotency, and BDD scenario coverage"
     }
   ]
 }
