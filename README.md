@@ -14,7 +14,7 @@ At [Hivemind Technologies](https://hivemindtechnologies.com), we build scalabe d
 
 AI coding agents are remarkably capable, but left unconstrained they tend toward the same failure modes as a talented developer working without discipline: skipping tests, over-engineering, and conflating building with cleaning. This skill gives Claude Code a concrete methodology to follow — one that engineers have used to ship reliable software for decades.
 
-It encodes seven principles:
+It encodes eight principles:
 
 1. **Test First** — the RED → GREEN → CLEAN cycle, enforced strictly. No production code without a failing test.
 1. **BDD Scenarios as Success Criteria** — Given/When/Then scenarios are written before tests, making intent explicit and verifiable before a line of implementation exists.
@@ -23,6 +23,7 @@ It encodes seven principles:
 1. **Refactor as a Separate Phase** — structural improvements are always made after green, never mixed with feature work.
 1. **Domain-Driven Design** — code speaks the language of the domain. Bounded contexts enforce explicit boundaries. Value objects replace primitives. Domain events model facts as immutable values. Repositories abstract persistence from domain logic.
 1. **Functional Core** — pure functions as the default, referential transparency as the goal. Side effects are pushed to the edges. Errors are modelled as `Either`/`Result` types, not exceptions. Absent values are `Option`, not null. State changes return new values; nothing mutates in place. Where the language supports it, function composition (including monadic chains) builds complex behaviour from simple, testable parts.
+1. **Total Types and Explicit Outcomes** — the decision rule for *which* type carries an outcome. `Option` only where absence needs no explanation; `Either`/`Result` where the caller may need to distinguish, report, recover from, or test the failure. Null never enters the typed core — nullable values are normalised at the boundary. Optionals that depend on each other become a sum type, so invalid combinations cannot be constructed. Closed types are eliminated exhaustively, with no default branch and no forced unwrap. Exceptions keep a defined role: broken invariants and defects, not outcomes.
 
 -----
 
@@ -68,6 +69,8 @@ plugins/xp-clean-code/                    # how to build
         └── references/
             ├── testing-patterns.md       # Framework examples: Scala, Java, Python, PySpark,
             │                             #   TypeScript, Rust, Gherkin
+            ├── total-types.md            # Option/Either/ADT idioms per language; result-type
+            │                             #   conformance properties
             └── scenario-examples.md      # Worked BDD scenarios across common problem types
 
 plugins/pr-validation/                    # verifying what was built
@@ -79,8 +82,9 @@ plugins/pr-validation/                    # verifying what was built
     └── pr-validation/
         ├── SKILL.md                      # The four analyses — loaded by Claude Code
         └── references/
-            ├── purity-checklist.md       # Impurity signals: Python, Scala, Java, TypeScript, Rust
-            ├── gap-patterns.md           # Ten coverage gap patterns, with before/after scenarios
+            ├── purity-checklist.md       # Impurity signals + absence-vs-failure signals:
+            │                             #   Python, Scala, Java, TypeScript, Rust
+            ├── gap-patterns.md           # Eleven coverage gap patterns, with before/after scenarios
             └── claim-verification.md     # Mutation catalogue for the removal check
 ```
 

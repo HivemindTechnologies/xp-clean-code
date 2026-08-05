@@ -314,6 +314,64 @@ Scenario: Failed credit leaves source account unchanged
 
 ---
 
+## Pattern 11: Absence Conflated With Failure
+
+**Signal:** A function returns an `Option`/nullable, and the empty value has more than one cause. No scenario distinguishes "there was genuinely nothing to return" from "the computation could not be performed".
+
+**Code under review:**
+```python
+def gamma_flip(chain: Sequence[ChainOption], spot: float) -> Optional[Strike]:
+    """The strike where net dealer gamma crosses zero. None if there is no crossing."""
+```
+
+Two very different facts arrive as the same `None`:
+
+1. Net gamma has the same sign at every strike — **the market has no flip in this range.**
+2. Only a narrow window of strikes was fetched, so any crossing lies outside it — **the search could not see the flip.**
+
+**Existing scenario:**
+```
+Scenario: A chain with no gamma crossing reports no flip
+  Given a chain whose net gamma is positive at every strike
+  When the gamma flip is computed
+  Then no flip is reported
+```
+
+**Missing scenario — and the reason the model is wrong:**
+```
+Scenario: A flip outside the searched strike range is reported as un-searched, not absent
+  Given a chain fetched over a +/-2% window around spot
+   And net gamma of the same sign at both ends of that window
+  When the gamma flip is computed
+  Then the result reports that no crossing was found within the searched range
+   And the searched range is included in the result
+   And it is distinguishable from a chain that has no crossing at all
+```
+
+The scenario cannot be written against `Optional[Strike]` — there is nowhere for "the searched range" to live. That is the tell: **when a missing scenario cannot be expressed against the current return type, the return type is the defect.** The fix is a result type carrying the bounds (`FlipSearch { low, high, gex_at_low, gex_at_high, flip }`), or an ADT with `NoCrossing` and `OutsideSearchedRange` as distinct cases.
+
+**Why this matters:** a consumer deciding whether to act on a signal treats "no flip exists" as information and "we could not look far enough" as a data problem. Collapsed into one `None`, the second reads as the first, and the system acts confidently on a measurement it never made. This pattern is a coverage gap and a modelling defect at once — report it under both Analysis 1 (dishonest signature) and Analysis 3.
+
+**How to screen for it quickly:** read the docstring of every `Option`-returning function in the diff. If the sentence explaining the empty case contains "or", or the body has more than one `return None`, look closer.
+
+**Then apply the deciding test, because that screen over-triggers.** Several guards can serve one cause:
+
+```python
+def compute_vol_richness(history: VolHistory, min_sample: int) -> Optional[VolRichness]:
+    """None when there is no screen to compute at all — an empty series on either side,
+    or a zero current HV."""
+    if not iv or not hv or hv[-1] == 0.0:
+        return None
+```
+
+Three conditions, one `None`, an "or" in the docstring — and it is correctly modelled. Every branch means *"there is no usable series"*, and the caller withholds the reading in all three cases. Splitting it would produce variants no caller branches on.
+
+> The deciding test is not how many ways the function can return empty. It is whether a caller would **act differently**, **report differently**, or need a **different scenario** depending on which way it did.
+
+Apply it before writing the finding. `_to_nomination`'s five rejections fail the test (each is a different malformed-output report a debugger needs); `compute_vol_richness`'s three guards pass it. A report that flags both has spent its credibility on the one that was already right.
+
+---
+
 ## Coverage Gap Summary Template
 
 When reporting gaps, use this format for each finding:

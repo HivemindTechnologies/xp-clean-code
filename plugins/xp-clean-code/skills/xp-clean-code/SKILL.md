@@ -10,11 +10,11 @@ description: >-
   criteria", "Given/When/Then", "TDD", "BDD", "domain model", "value
   object", "aggregate", "pure function", "side effect", "referential
   transparency", "idempotent", "monad", "Either", "Option", "Result",
-  "newtype", "type hint", "type annotation", "mypy", "pyright", "clippy",
-  or any request to build something
-  non-trivial. Composes cleanly with Karpathy-style
-  behavioural guidelines: where those address how an agent should reason,
-  this skill addresses how code should be built.
+  "newtype", "null", "nullable", "ADT", "sum type", "exhaustive",
+  "assert_never", "type annotation", "mypy", "pyright", "clippy", or any
+  request to build something non-trivial. Composes cleanly with
+  Karpathy-style behavioural guidelines: where those address how an agent
+  should reason, this skill addresses how code should be built.
 ---
 
 # XP · Clean Code · DDD · Functional Design
@@ -522,6 +522,177 @@ def find_customer(customer_id: CustomerId) -> Optional[Customer]:
 
 ---
 
+### 8. Total Types and Explicit Outcomes
+
+Principle 7 requires that absence, failure, and I/O appear in the return type. This principle governs **which** type to reach for, and how callers must eliminate it. `Option`, `Either`, a sealed ADT, and an exception are not interchangeable — choosing the wrong one destroys information the caller needs.
+
+#### Choose by what the caller needs to know
+
+| Situation | Model |
+|---|---|
+| A value genuinely may not exist, and absence is expected | `Option[A]` / `Optional[A]` / `A \| None` |
+| An operation can fail for a known, recoverable reason | `Either[E, A]` / `Result<A, E>` |
+| A value is one of several domain or lifecycle cases | Sealed ADT / discriminated union |
+| Multiple independent validation errors must accumulate | `Validated[Errors, A]` |
+| An invariant is broken, or the process cannot continue | Exception, assertion, process failure |
+
+> Use `Option` only when the caller needs no explanation for absence. Use `Either` when the caller may need to distinguish, report, recover from, or **test** the unsuccessful outcome.
+
+```
+findPromotion(code)   -> Option[Promotion]              // absence is normal: no promotion applies
+placeOrder(command)   -> Either[PlaceOrderError, Order] // failure has meaning: suspended, unavailable, rejected
+```
+
+The test in that rule is the operative one. If you cannot write a distinct `Then` for two different ways the value came back empty, `Option` is right. The moment two absences need different scenarios, they need different types.
+
+**The common defect is the reverse: `Option` used as a silent failure channel.**
+
+```python
+# Bad — five distinct rejections collapse into one None; the caller cannot report, retry, or test them
+def to_nomination(item: Any) -> Optional[Nomination]:
+    if not isinstance(item, dict):        return None
+    if item.get("direction") not in DIRECTIONS: return None
+    if not item.get("thesis"):            return None
+    ...
+
+# Good — the reason survives, and each branch is a scenario
+def to_nomination(item: Any) -> Result[Nomination, NominationError]:
+    ...
+```
+
+An `Option` that hides a failure is worse than an exception: an exception at least carries a message and a stack.
+
+#### Null is not a domain type
+
+> No domain value inside the typed core may be `null`, `None`, or `undefined`.
+
+Nullable values are permitted only in explicitly named **boundary representations** — database rows, JSON and HTTP payloads, framework callbacks, legacy APIs, deserialisation DTOs, foreign library interfaces. Every boundary translates them immediately into a mandatory value, an `Option`, an `Either`, or a domain ADT. The rule is not "check for null"; it is **normalise at the boundary so null cannot travel**.
+
+```typescript
+type CustomerRow = { display_name: string | null };      // boundary representation
+
+type CustomerName =                                       // domain type
+  | { readonly kind: "known"; readonly value: string }
+  | { readonly kind: "anonymous" };
+
+function toCustomerName(value: string | null): CustomerName {
+  return value === null ? { kind: "anonymous" } : { kind: "known", value };
+}
+```
+
+A row DTO and a domain type that happen to share a shape are still two types. When persistence nullability reaches domain code, the boundary is missing.
+
+#### Dependent optionals become sum types
+
+An optional field often hides several states. Optionals that are independent are fine; optionals whose validity depends on each other, or on a status field, are a modelling defect — they admit combinations that cannot occur.
+
+```typescript
+// Bad — permits contradictory states: processing with a receipt, succeeded with a failure reason
+type Payment = { receipt?: Receipt; failureReason?: string; isProcessing: boolean };
+
+// Good — invalid combinations are unrepresentable
+type Payment =
+  | { readonly kind: "pending" }
+  | { readonly kind: "processing"; readonly startedAt: Instant }
+  | { readonly kind: "succeeded"; readonly receipt: Receipt }
+  | { readonly kind: "failed";    readonly error: PaymentError };
+```
+
+**Every optional field carries a one-line reason for its absence.** Where the reason cannot be written in one line, or where it names more than one cause, the field is standing in for a sum type. Warning signs:
+
+- Two optional fields that are always absent or present together.
+- An optional whose validity depends on a status enum or boolean flag.
+- A boolean that controls whether another field exists.
+- A comment of the form *"only populated when…"* or *"absent if …, or …"*.
+- A constructor that accepts partially valid states.
+- One `None` documented as covering several distinct causes.
+
+That last one is the sharpest signal. "Absent because there was nothing to measure" and "absent because the computation failed" are different facts, and a caller deciding whether to act on the value needs to know which it has.
+
+These are screens, not verdicts. Several guards often serve a single cause — three checks that all mean "there is no usable input" are one absence, and splitting them yields variants nobody branches on. Before splitting anything, apply the deciding test: **would a caller act differently, report differently, or need a different scenario depending on which case it received?** If not, one `Option` is correct and the reason belongs in a comment.
+
+#### Eliminate exhaustively
+
+Introducing the type is half the work; callers must consume it without escape hatches.
+
+- Match exhaustively. No default branch on a closed domain ADT — a default silences the compiler check that a new variant would otherwise trip.
+- No forced unwrap, no unchecked cast, no null assertion: `get()`, `.value`, `!`, `!!`, `as T`, `unwrap()`.
+- No arbitrary fallback substituted for a missing value. A default is a domain decision and needs a scenario.
+
+Two constructs satisfy exhaustiveness. Use whichever the language makes natural:
+
+```python
+# 1 — a match with assert_never: the type checker fails if a variant is added and not handled
+from typing import assert_never
+
+def message_for(result: PaymentResult) -> str:
+    match result:
+        case Approved(receipt=receipt): return f"Receipt {receipt.id}"
+        case Declined(reason=reason):   return reason.message
+        case Unavailable():             return "Payment service unavailable"
+        case _:                         assert_never(result)
+
+# 2 — a total eliminator: fold takes one handler per case, so omitting one is a type error
+receipt_line = payment_result.fold(
+    on_ok=lambda receipt: f"Receipt {receipt.id}",
+    on_err=lambda error: error.message,
+)
+```
+
+`fold` is the better fit for two-case types like `Result`, and the natural one in languages without exhaustive pattern matching. Both are acceptable; an `isinstance` ladder with no final `assert_never` is not.
+
+#### Exceptions still have a place
+
+A blanket "never throw" rule is counterproductive and pushes people to smuggle defects through `Option`.
+
+| Use a typed return value for | Use an exception for |
+|---|---|
+| Business rejection | A violated programmer invariant |
+| Expected lookup absence | Corrupt internal state |
+| Validation failure | Misconfiguration at startup |
+| Concurrency conflicts the caller can retry | Resource exhaustion |
+| External failures the caller can handle | Failures that cannot be handled locally |
+
+> `Either` represents an outcome **in** the function's contract. An exception represents a failure to fulfil or execute that contract.
+
+So a value object rejecting an impossible value in its constructor should raise — the caller passed something that cannot exist, which is a defect, not an outcome. At infrastructure boundaries, catch the vendor's exceptions and translate them into a small typed vocabulary; never let `SQLException`, `AxiosError`, or a bare `requests` exception reach domain code.
+
+```python
+def load_customer(repo: CustomerRepository, customer_id: CustomerId) -> Result[Customer, CustomerLoadError]:
+    try:
+        found = repo.get(customer_id)
+    except DatabaseTimeout:
+        return Err(CustomerLoadError.UNAVAILABLE)      # infrastructure failure, translated
+    return Ok(found) if found is not None else Err(CustomerLoadError.NOT_FOUND)
+```
+
+#### The review decision tree
+
+Apply this to every nullable or optional value, in order:
+
+```
+1. Can the value be made mandatory by construction?
+   Yes → make it mandatory.                     No → continue.
+
+2. Is absence a normal, explanation-free outcome?
+   Yes → Option.                                No → continue.
+
+3. Does the unsuccessful outcome have domain meaning?
+   Yes → Either/Result with a closed error ADT.  No → continue.
+
+4. Are several lifecycle states being represented?
+   Yes → replace the structure with an ADT.      No → continue.
+
+5. Is it nullable only because it came from an external system?
+   Yes → convert it at the boundary.             No → require explicit justification.
+```
+
+Step 1 first, always: the cheapest optional to eliminate is the one that never needed to exist.
+
+For per-language idioms — boundary normalisation, ADT declaration, exhaustive elimination, and the conformance properties a hand-rolled result type must satisfy — see `references/total-types.md`.
+
+---
+
 ## Interaction with Other Guidelines
 
 This skill is additive. When used alongside Karpathy-style behavioural rules:
@@ -533,7 +704,7 @@ This skill is additive. When used alongside Karpathy-style behavioural rules:
 | Surgical changes | Refactor-as-separate-phase keeps structural improvements out of feature commits |
 | Goal-driven execution | Given/When/Then *is* the success criterion, made verifiable |
 | Don't assume | Ubiquitous language surfaces hidden assumptions — if the name is wrong, the model is wrong |
-| Avoid hidden state | Pure functions and immutability make all state explicit and traceable |
+| Avoid hidden state | Pure functions and immutability make all state explicit and traceable — and null is the most common hidden state of all: a type that claims a value exists when it may not |
 
 ---
 
@@ -556,6 +727,10 @@ Immutability:       Default to val / frozen / record; mutation requires justific
 Effects:            Push I/O to the boundary; model with Option / Either / IO
 Composition:        map/flatMap over mutation; pipelines over sequential statements
 Idempotency:        Write a scenario for double-application of every state transition
+Outcomes:           Option only for explanation-free absence; Either/Result when the failure
+                    has domain meaning; sealed ADT for lifecycle states; exception for defects
+Nulls:              Never in the typed core — normalise at the boundary. Dependent optionals
+                    become sum types. Eliminate exhaustively: assert_never or fold, no unwrap
 Typing:             Annotate every signature in dynamic languages; unannotated = build failure
 Rust:               Newtypes with private fields; typed error enums; propagate with ?;
                     no unwrap/expect/RefCell/now() in domain code — deny them in Cargo.toml
@@ -565,3 +740,4 @@ Comments:           Why, never what
 
 For language- or framework-specific testing patterns, see `references/testing-patterns.md`.
 For worked examples of BDD scenarios across common problem types, see `references/scenario-examples.md`.
+For per-language total-type idioms — boundary normalisation, ADTs, exhaustive elimination — see `references/total-types.md`.
