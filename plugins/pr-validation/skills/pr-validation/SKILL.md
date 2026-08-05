@@ -1,21 +1,21 @@
 ---
 name: pr-validation
 description: >-
-  Validate a pull request against XP and clean code standards. Analyses changed
-  functions for purity, idempotency, and BDD scenario coverage. Use when
-  reviewing a PR, checking test coverage, identifying coverage gaps, verifying
-  that changes are backed by BDD scenarios, or auditing purity and idempotency
-  of changed functions. Triggers on phrases like "review PR", "validate PR",
-  "validate the PR", "check coverage", "BDD coverage", "coverage gaps",
-  "scenario gaps", "pure function check", "idempotency check",
-  "verify purity", "analyse coverage", "pull request validation", "PR review",
-  "verify idempotency", "test coverage", "missing scenarios",
-  "are my functions pure", "is this idempotent", "what's missing from my tests".
-  Composes with the xp-clean-code skill: where that skill governs how to build,
-  this skill validates that what was built meets those standards.
+  Validate a pull request against XP and clean code standards: purity and
+  idempotency of changed functions, BDD scenario coverage, and whether every
+  protection the PR body claims ("prevents", "guards against", "blocks") is
+  backed by a test that fails when that protection is removed. Triggers on
+  "review PR", "validate PR", "PR review", "pull request validation",
+  "check coverage", "BDD coverage", "coverage gaps", "missing scenarios",
+  "test coverage", "pure function check", "verify purity", "are my functions
+  pure", "idempotency check", "verify idempotency", "is this idempotent",
+  "verify claims", "PR body claims", "unsubstantiated claim", "mutation check",
+  "does this test actually fail", "what's missing from my tests". Composes with
+  the xp-clean-code skill: where that skill governs how to build, this skill
+  validates that what was built meets those standards.
 ---
 
-# PR Validation · Purity · Idempotency · BDD Coverage
+# PR Validation · Purity · Idempotency · BDD Coverage · Protection Claims
 
 This skill audits a pull request against the quality standards established in the xp-clean-code skill. It does not enforce how to build — it verifies that what was built meets the standards.
 
@@ -27,12 +27,19 @@ The rules here are non-negotiable defaults. Deviate only when the user explicitl
 
 ## How to Run This Validation
 
-1. Obtain the diff for the PR (changed files, hunks, line ranges).
+1. Obtain the diff for the PR (changed files, hunks, line ranges) **and the PR body, title, and commit messages** — Analysis 4 validates the prose against the tests.
 2. Identify every changed function, method, or procedure.
-3. Run each of the three analyses below independently.
+3. Run each of the four analyses below independently.
 4. Produce the structured gap report.
 
 Always work from the diff. Do not analyse unchanged code unless a changed function calls it and the call site is relevant to the analysis.
+
+| Analysis | Question |
+|---|---|
+| 1 · Purity | Is each changed function referentially transparent, or justifiably at the boundary? |
+| 2 · Idempotency | Is every state transition safe to apply twice? |
+| 3 · BDD coverage | Does a scenario exercise every changed behaviour? |
+| 4 · Protection claims | Does every protection the PR body claims have a test that fails without it? |
 
 ---
 
@@ -121,7 +128,52 @@ db.save(confirmed)
 email_queue.enqueue(ConfirmationEmail(confirmed))
 ```
 
-For language-specific impurity detection signals (Python, Scala, Java, TypeScript), see `references/purity-checklist.md`.
+The same three classes in Rust, where the signature usually gives the answer before the body does:
+
+```rust
+// PURE — consumes and returns; no observable mutation, no ambient input
+fn apply_discount(price: Money, discount: Discount) -> Money {
+    Money::new(price.amount() * (1.0 - discount.rate()), price.currency())
+}
+
+// IMPURE — BOUNDARY (acceptable: adapter module, async, wraps a pure domain value)
+async fn save_order(order: &Order, pool: &PgPool) -> Result<(), RepositoryError> {
+    sqlx::query!("INSERT INTO orders (id, status) VALUES ($1, $2)", order.id(), order.status())
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+// IMPURE — VIOLATION (defect: domain module doing I/O, mutating its argument, panicking)
+async fn confirm_order(order: &mut Order, pool: &PgPool) {
+    let stored = repo::find(order.id(), pool).await.unwrap();  // I/O + panic on failure
+    order.status = Status::Confirmed;                          // argument mutation
+    repo::save(&stored, pool).await.unwrap();                  // I/O inside domain logic
+    email::send(order.customer_email()).await.unwrap();        // I/O inside domain logic
+}
+```
+
+The fix is the same split — `fn confirm(self) -> Order` in the domain, `async fn` in the adapter:
+
+```rust
+// Functional core — total, synchronous, no dependencies on infrastructure
+pub fn confirm(order: Order) -> Order {
+    Order { status: Status::Confirmed, ..order }
+}
+
+// Imperative shell — owns every effect, and every failure is typed
+pub async fn confirm_order(id: &OrderId, pool: &PgPool, mail: &impl Mailer)
+    -> Result<Order, ConfirmError>
+{
+    let order     = repo::find(id, pool).await?.ok_or(ConfirmError::NotFound)?;
+    let confirmed = confirm(order);
+    repo::save(&confirmed, pool).await?;
+    mail.enqueue(ConfirmationEmail::for_order(&confirmed)).await?;
+    Ok(confirmed)
+}
+```
+
+For language-specific impurity detection signals (Python, Scala, Java, TypeScript, Rust), see `references/purity-checklist.md`.
 
 ---
 
@@ -194,6 +246,44 @@ def registerPayment(payment: Payment): Unit =
 // Fix: upsert on a unique idempotency key, or check for existence first.
 ```
 
+```rust
+// IDEMPOTENT — assigns a fixed state; the second call produces the same value
+pub fn confirm(order: Order) -> Order {
+    Order { status: Status::Confirmed, ..order }
+}
+
+// NOT IDEMPOTENT — increments; every call changes the result
+pub fn record_attempt(order: Order) -> Order {
+    Order { attempts: order.attempts + 1, ..order }
+}
+// Fix: store a Set<AttemptId> of observed attempt ids, or guard on the id of the attempt being recorded.
+
+// NOT IDEMPOTENT — unconditional insert; a redelivered message duplicates the row
+pub async fn register_payment(payment: &Payment, pool: &PgPool) -> Result<(), RepositoryError> {
+    sqlx::query!("INSERT INTO payments (id, order_id, amount) VALUES ($1, $2, $3)",
+        payment.id(), payment.order_id(), payment.amount())
+        .execute(pool).await?;
+    Ok(())
+}
+// Fix: ON CONFLICT (idempotency_key) DO NOTHING, and assert the returned row count in the test.
+
+// IDEMPOTENT — the state transition is a no-op when already applied, and the event
+// is emitted only on an actual transition
+pub fn confirm_once(order: Order) -> (Order, Vec<DomainEvent>) {
+    match order.status {
+        Status::Confirmed => (order, vec![]),
+        _ => {
+            let id = order.id().clone();
+            (Order { status: Status::Confirmed, ..order }, vec![DomainEvent::OrderConfirmed(id)])
+        }
+    }
+}
+```
+
+Returning events as a value rather than publishing them makes the "no duplicate event" half of the
+idempotency scenario directly assertable — a Rust function that publishes from inside the domain
+fails both Analysis 1 and Analysis 2.
+
 ---
 
 ## Analysis 3: BDD Scenario Coverage
@@ -252,14 +342,106 @@ These patterns reliably indicate missing coverage. Check each one for every chan
 | **Bundled `When`** | A scenario contains two actions — it is two scenarios collapsed into one |
 | **Missing contract test** | A dependency is always mocked; no scenario verifies the real contract |
 | **No rollback scenario** | A multi-step write has no scenario for what happens if a later step fails |
+| **Toothless test** | The test passes when the code it claims to cover is deleted — see Analysis 4 |
 
 For worked examples of each pattern with before/after scenarios, see `references/gap-patterns.md`.
 
 ---
 
+## Analysis 4: Protection Claim Verification
+
+**For every assertion the PR body makes about what a check protects against, verify there is a test that fails when that protection is removed.**
+
+A claim of protection is a testable statement. If removing the guard leaves the suite green, the claim is unsubstantiated — the guard is untested, unreachable, or the test passes for an unrelated reason. This analysis is mandatory and applies to the PR body, the PR title, and the commit messages, whoever wrote them.
+
+### Step 1 — Extract the claims
+
+Read the PR body, title, and commit messages. Enumerate every statement that asserts the change prevents, blocks, or handles something. Claim verbs to look for:
+
+```
+prevents · protects against · guards against · blocks · rejects · validates
+sanitises · ensures · enforces · makes safe · avoids · eliminates · fixes
+handles · catches · retries · deduplicates · no longer possible · can't happen
+```
+
+Statements that are **not** claims and need no test: renames, refactors with no behaviour change, documentation edits, dependency bumps, formatting, and descriptions of *what the code does* rather than *what it prevents* ("adds a `Region` enum" is not a claim; "prevents shipping to unsupported regions" is).
+
+Record each claim verbatim — the exact sentence from the body — so the report can be checked against the source.
+
+### Step 2 — Locate the protection and its test
+
+For each claim, identify two things in the diff:
+
+1. **The protection site** — the specific lines that implement the guard: the validation, the conditional, the constraint, the retry limit, the idempotency key.
+2. **The covering test** — the test or scenario that asserts the protected behaviour.
+
+If you cannot find the protection site, the claim describes something the diff does not do. Flag it immediately as **UNSUBSTANTIATED** and stop; there is nothing to mutate.
+
+If you cannot find a covering test, the claim is **UNSUBSTANTIATED**. Do not proceed to Step 3 — record the missing scenario instead.
+
+### Step 3 — The removal check
+
+Establish a green baseline, then remove the protection and re-run only the mapped tests. **The mapped test must fail.**
+
+```
+1. Confirm the mapped test passes as-is.          → baseline green
+2. Remove or invert the protection.               → one mutation, smallest possible
+3. Re-run the mapped test.                        → it MUST fail
+4. Confirm the failure is about the claim.        → not a compile error, not an unrelated assertion
+5. Restore the code exactly.                      → git checkout -- <file>
+6. Confirm the test passes again.                 → baseline restored
+```
+
+**Common mutations, by protection type:**
+
+| Protection | Mutation |
+|---|---|
+| Guard clause / early return | Delete it |
+| Boolean condition | Invert it |
+| Validation function | Make it return success unconditionally |
+| Boundary comparison | `<` → `<=`, `>=` → `>` |
+| Retry / attempt limit | Raise it to a value the test cannot reach |
+| Idempotency guard or dedup key | Remove the guard; make the key unique per call |
+| Auth / permission check | Return "authorised" unconditionally |
+| Error branch | Return a default value instead of the error |
+| Timeout | Remove it, or set it beyond the test's window |
+| Constraint (DB, type, enum) | Widen it to admit the rejected value |
+
+**Interpreting the outcome:**
+
+| Outcome | Verdict | Meaning |
+|---|---|---|
+| Mapped test fails, for the claimed reason | **VERIFIED** | The claim is backed by a test with teeth |
+| Mapped test still passes | **NOT DETECTED** | The test does not exercise the protection — over-mocked, wrong path, weak assertion, or the guard is unreachable |
+| A *different* test fails, mapped test passes | **MISATTRIBUTED** | Coverage exists but the mapped scenario is the wrong one; re-map and repeat |
+| Only a compile / type error results | **INCONCLUSIVE** | The mutation was too coarse — the type system rejected it, not the test. Try a subtler mutation that still compiles |
+| Tests cannot be run in this environment | **UNVERIFIABLE** | Report the claim as unverified and say why. Never report VERIFIED from reading code alone |
+
+### Safety rules for the removal check
+
+- Mutate a scratch copy or a throwaway worktree, never the branch under review.
+- **Never commit a mutation.** Restore after every single one, and verify the restore before the next.
+- One mutation at a time. Two simultaneous mutations make the failure unattributable.
+- Run only the mapped tests, not the full suite — but confirm the full suite's baseline is green before you start, or a pre-existing failure will read as a verified claim.
+- If the toolchain is unavailable (no dependencies installed, no test runner, secrets required), report **UNVERIFIABLE** with the reason. A static reading is not a removal check, and must not be presented as one.
+
+### When you are the author of the PR body
+
+The same rule applies to your own writing, before the PR is opened:
+
+- Do not write a protection claim you have not put through the removal check.
+- If the check is unverified, either add the test that makes it fail, or reword the sentence to describe the change without asserting protection: "adds a length check on `Sku`" rather than "prevents malformed SKUs from reaching the database".
+- Claims copied from the issue or ticket are not exempt. If the ticket says it prevents X, verify it prevents X.
+
+An unverified protection claim in a PR body is a defect in the PR, on the same footing as a purity violation. It sends a reviewer a guarantee the test suite does not provide.
+
+For worked examples of each mutation type, and for the claim-to-mutation mapping in Python, Scala, TypeScript, and Rust, see `references/claim-verification.md`.
+
+---
+
 ## Output Format
 
-Produce a structured report with three sections. Use this exact structure:
+Produce a structured report with four sections. Use this exact structure:
 
 ```
 ## PR Validation Report
@@ -302,19 +484,39 @@ Produce a structured report with three sections. Use this exact structure:
 
 ---
 
-**Verdict:** FAIL — 1 purity violation, 1 idempotency gap, 3 coverage gaps.
+### 4. Protection Claim Verification
+
+| Claim (from PR body) | Protection site | Mapped test | Mutation applied | Result |
+|---|---|---|---|---|
+| "Prevents duplicate payments on message redelivery" | `repo/payment_repo.py:31` (`ON CONFLICT DO NOTHING`) | `test_duplicate_payment_is_ignored` | Removed the `ON CONFLICT` clause | **VERIFIED** — test failed on duplicate row count |
+| "Blocks cross-user order access" | `api/orders.py:57` (owner check) | `test_forbidden_for_other_user` | Made the owner check return `True` | **NOT DETECTED** — test still passed; it asserts on a 403 produced by the auth middleware, not by this check |
+| "Guards against malformed SKUs reaching the database" | not found in diff | — | — | **UNSUBSTANTIATED** — no validation added |
+
+**Unverified claims requiring action:**
+- "Blocks cross-user order access": the owner check at `api/orders.py:57` is not covered. The passing test exercises the missing-token path instead. Add a scenario with a valid token for user-42 requesting user-99's order, asserting 403 from the ownership check.
+- "Guards against malformed SKUs reaching the database": no such check exists in the diff. Either add it with a covering scenario, or remove the claim from the PR body.
+
+---
+
+**Verdict:** FAIL — 1 purity violation, 1 idempotency gap, 3 coverage gaps, 2 unverified claims.
 ```
 
-If all three analyses pass with no findings, abbreviate the report to:
+If all four analyses pass with no findings, abbreviate the report to:
 
 ```
 ## PR Validation Report
 All changed functions are pure or appropriately boundary-impure. All state-changing
 operations are idempotent and covered by double-application scenarios. BDD scenario
-coverage is complete, with no quality issues found.
+coverage is complete, with no quality issues found. Every protection claim in the PR
+body was confirmed by a removal check: each mapped test fails when its guard is removed.
 
 **Verdict:** PASS
 ```
+
+State the removal-check outcome explicitly even when the PR body makes no claims ("the PR body asserts
+no protections; Analysis 4 is not applicable") and when the checks could not be run ("Analysis 4:
+UNVERIFIABLE — `cargo test` requires a database that is not available in this environment"). Silence
+on Analysis 4 reads as a pass it did not earn.
 
 ---
 
@@ -329,6 +531,7 @@ This skill is the validation layer for the xp-clean-code skill. The relationship
 | Idempotency scenario for every state transition | Check for the double-application scenario in the test suite |
 | Refactor as a separate phase | Verify that the diff does not mix behaviour changes with structural changes |
 | One step at a time | Flag PRs that touch more than one scenario in a single commit |
+| A test that never fails proves nothing | Remove each protection and prove its test fails — for every claim the PR body makes |
 
 ---
 
@@ -342,6 +545,10 @@ Before reporting PASS:
   □ Every state-changing operation has a double-application scenario
   □ Coverage matrix built — happy path, failure modes, edge cases
   □ Each scenario checked for one-When, verifiable-Then, explicit-Given
+  □ Every protection claim in the PR body extracted verbatim
+  □ Every claim mapped to a protection site and a test
+  □ Every mapped test proven to FAIL with its protection removed
+  □ Every mutation restored, and the baseline confirmed green again
 
 Purity:         Same input → same output; no hidden I/O; no argument mutation
 Boundary:       I/O at the outermost layer only; domain logic must be pure
@@ -349,10 +556,13 @@ Idempotency:    f(f(x)) = f(x); every state transition needs a double-apply scen
 Coverage:       One scenario per happy path, per failure mode, per edge case
 Gap patterns:   Happy-path-only, missing boundary, vague Then, hidden fixture,
                 bundled When, missing contract, missing rollback
+Claims:         Every "prevents / blocks / guards against" in the PR body needs a test
+                that fails when the guard is removed. No removal check → no claim.
 
-Report:         Three sections — Purity | Idempotency | Coverage
-Verdict:        PASS only when all three sections have zero actionable findings
+Report:         Four sections — Purity | Idempotency | Coverage | Claims
+Verdict:        PASS only when all four sections have zero actionable findings
 ```
 
 For language-specific impurity detection patterns, see `references/purity-checklist.md`.
 For worked examples of each coverage gap pattern, see `references/gap-patterns.md`.
+For the claim-to-mutation catalogue and worked removal checks, see `references/claim-verification.md`.
