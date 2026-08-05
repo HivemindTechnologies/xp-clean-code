@@ -67,6 +67,7 @@ For each changed function, classify it as one of:
 | Class | Meaning |
 |---|---|
 | **Pure** | Referentially transparent; no side effects. |
+| **Pure — dishonest signature** | No side effects, but the type hides an outcome: an `Option` standing in for a typed failure, dependent optionals, a widened error type. See *Signature Honesty* below. |
 | **Impure — boundary** | Side effects are expected and justified. The function lives at the I/O boundary by design (e.g. a repository, an HTTP adapter, an event publisher). |
 | **Impure — violation** | Side effects are hidden inside domain logic where they do not belong. This is a defect. |
 
@@ -84,6 +85,26 @@ For each changed function, answer every question:
 ```
 
 If any box is checked and the function is **not** at the I/O boundary, classify it as **Impure — violation** and flag it.
+
+### Signature Honesty
+
+A pure function can still lie. Purity says the signature hides no *effects*; these questions ask whether it hides an *outcome* — which is the same defect one layer up, and the reason a caller ends up unable to test a branch that exists.
+
+```
+□ Does an Optional/nullable return stand in for a failure the caller must distinguish?
+  → More than one reason for the empty value, or a docstring explaining what absence
+    means, and it should be Either/Result with a typed error.
+□ Does a changed record add an optional field whose validity depends on another field
+  or on a status flag? → dependent optionals belong in a sum type.
+□ Is a closed ADT consumed with a default branch, or eliminated with a forced unwrap
+  (get(), .value, !, !!, as T, unwrap())?
+□ Does a nullable value from a boundary representation (DB row, JSON payload, DTO)
+  reach domain code without being normalised?
+□ Does an error type get widened on the way through (Result[T, DomainError] →
+  anyhow/Exception/Any), erasing what the caller needs to branch on?
+```
+
+Findings here are reported in the Analysis 1 table with the classification **Pure — dishonest signature**: the function is referentially transparent, and the return type still costs the caller information. Cite the decision tree in Principle 8 of xp-clean-code when recommending the fix, and name which step it fails.
 
 ### Boundary Layer Rules
 
@@ -343,6 +364,7 @@ These patterns reliably indicate missing coverage. Check each one for every chan
 | **Missing contract test** | A dependency is always mocked; no scenario verifies the real contract |
 | **No rollback scenario** | A multi-step write has no scenario for what happens if a later step fails |
 | **Toothless test** | The test passes when the code it claims to cover is deleted — see Analysis 4 |
+| **Absence conflated with failure** | An `Option` whose empty case has two causes; no scenario tells them apart |
 
 For worked examples of each pattern with before/after scenarios, see `references/gap-patterns.md`.
 
@@ -451,10 +473,12 @@ Produce a structured report with four sections. Use this exact structure:
 | Function | Module | Classification | Issue |
 |---|---|---|---|
 | `confirm(order)` | `domain/order.py` | Pure | — |
+| `to_nomination(item)` | `domain/scouting.py` | Pure — dishonest signature | Five distinct rejections return `None`; caller cannot report or test them (decision tree step 3) |
 | `confirm_order(order_id)` | `service/order_service.py` | Impure — violation | Calls db.find and db.save inside domain logic |
 
 **Violations requiring action:**
 - `confirm_order` in `service/order_service.py` (line 42): moves db.find/save out of the domain function and into the boundary layer.
+- `to_nomination` in `domain/scouting.py` (line 237): return `Result[Nomination, NominationError]` with one variant per rejection; each variant then gets a scenario.
 
 ---
 
@@ -539,8 +563,9 @@ This skill is the validation layer for the xp-clean-code skill. The relationship
 
 ```
 Before reporting PASS:
-  □ Every changed function classified (Pure / Boundary / Violation)
+  □ Every changed function classified (Pure / Dishonest signature / Boundary / Violation)
   □ Every Violation has a specific recommended fix
+  □ Every Option-returning change checked for a second cause of emptiness
   □ Every state-changing operation checked for idempotency
   □ Every state-changing operation has a double-application scenario
   □ Coverage matrix built — happy path, failure modes, edge cases
@@ -551,6 +576,8 @@ Before reporting PASS:
   □ Every mutation restored, and the baseline confirmed green again
 
 Purity:         Same input → same output; no hidden I/O; no argument mutation
+Signatures:     Option only for one-cause absence; typed error when the caller must branch;
+                dependent optionals are a sum type; no default branch, no forced unwrap
 Boundary:       I/O at the outermost layer only; domain logic must be pure
 Idempotency:    f(f(x)) = f(x); every state transition needs a double-apply scenario
 Coverage:       One scenario per happy path, per failure mode, per edge case

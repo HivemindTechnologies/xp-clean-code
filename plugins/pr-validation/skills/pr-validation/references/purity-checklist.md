@@ -357,6 +357,47 @@ A changed function that trades `Result<T, DomainError>` for `anyhow::Result<T>` 
 
 ---
 
+## Absence vs Failure — Per-Language Signals
+
+These are the *Signature Honesty* checks from Analysis 1. A pure function whose type collapses several outcomes into one empty value is a defect even though no box in the impurity checklist is ticked.
+
+**Screens — cheap to spot, and they over-trigger:**
+
+```
+□ A docstring or comment explaining the empty case that contains "or".
+□ A guard sequence with more than one early return of the same empty value.
+□ A caller that logs a message when the value is empty — it wanted the reason.
+□ Two optional fields that are always absent together, or an optional gated by a status flag.
+```
+
+**The deciding test, applied to every hit before it becomes a finding:**
+
+> Would a caller act differently, report differently, or need a different scenario depending on
+> *which* empty case it received?
+
+Several guards routinely serve one cause — three checks that all mean "there is no usable input"
+are one absence, and splitting them produces variants nobody branches on. Conversely one guard can
+hide several: a single `except (TypeError, ValueError): return None` around a parse covers a missing
+field and a malformed one, which are different upstream defects.
+
+Count causes, not `return` statements. Roughly half the hits from the screens above survive the
+deciding test on well-modelled code; a report that flags all of them has spent its authority on
+the ones that were already right.
+
+| Language | Reads as honest absence | Reads as a swallowed failure |
+|---|---|---|
+| **Python** | `-> Customer \| None` on a `find_*` lookup | `-> X \| None` from a `parse_*`/`_to_*` function; several `return None` guards; `dict.get()` result passed onward untouched |
+| **Scala** | `Option[Customer]` from a repository lookup | `Try(...).toOption`; `.headOption` on a filtered collection where empty means "no match" *and* "bad input"; `Either[String, A]` (untyped error) |
+| **Java** | `Optional<Customer>` returned by a finder | `Optional` as a field or parameter type; `catch (Exception e) { return Optional.empty(); }` |
+| **TypeScript** | `Customer \| undefined` from a lookup | `try { … } catch { return null }`; `?.` chains that end in `undefined` from three different causes; `as T` removing optionality |
+| **Rust** | `Option<T>` from `find`/`get`/`iter().next()` | `.ok()` discarding an `Err`; `let Ok(v) = … else { return None }`; `unwrap_or_default()` substituting a domain value |
+
+The `.ok()` and `Try.toOption` cases are worth calling out explicitly in a review: they are one-token conversions from a typed failure to an untyped absence, so they are easy to write and invisible in a diff.
+
+**In the report:** an `X | None` return whose emptiness has one documented cause is fine and needs no comment. Flag it only when the diff shows more than one cause, or when a caller demonstrably needs the reason. Do not turn every `Optional` in the diff into a finding — that is how a report loses its authority.
+
+---
+
 ## Boundary Layer Identification
 
 A function is an acceptable I/O boundary if **all** of the following hold:
