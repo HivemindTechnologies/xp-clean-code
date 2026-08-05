@@ -120,6 +120,31 @@ Scenario: Domestic standard orders use the standard rate
 
 If any branch lacks a scenario, the PR is missing coverage.
 
+**The same check on an exhaustive `match`** — every arm is a scenario, including the ones the compiler
+forced the author to write:
+
+```rust
+pub fn shipping_cost(order: &Order) -> Money {
+    match (order.speed(), order.destination().region()) {
+        (Speed::Express, _)                 => EXPRESS_RATE * order.weight(),
+        (Speed::Standard, Region::Domestic) => STANDARD_RATE * order.weight(),
+        (Speed::Standard, Region::Eu)       => EU_RATE * order.weight(),
+        (Speed::Standard, Region::RestOfWorld) => INTERNATIONAL_RATE * order.weight(),
+    }
+}
+```
+
+```
+Scenario: Express orders use the express rate regardless of destination
+Scenario: Standard domestic orders use the standard rate
+Scenario: Standard EU orders use the EU rate
+Scenario: Standard rest-of-world orders use the international rate
+```
+
+Four arms, four scenarios. A catch-all `_ =>` arm is its own scenario and a smell besides: it silences
+the exhaustiveness check, so a new `Region` variant will route to a default rate with no test failure.
+Flag `_` arms over domain enums in the report.
+
 ---
 
 ## Pattern 5: Vague `Then` Clause

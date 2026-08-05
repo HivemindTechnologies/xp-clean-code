@@ -233,6 +233,130 @@ function parseAge(raw: string): Result<Age, ValidationError> { ... }
 
 ---
 
+## Rust
+
+Rust's signatures carry more purity information than any other language on this list — read them first, then confirm against the body.
+
+### Signature-level signals (check these before reading the body)
+
+| Signature | Reading |
+|---|---|
+| `fn f(&self) -> T` | Likely pure — no mutation possible through `&self` alone |
+| `fn f(self) -> Self` | Pure transformation — consumes and produces |
+| `fn f(&mut self)` | Mutates the receiver; pure only in the "builder returning nothing" sense — check whether the caller observes an intermediate state |
+| `fn f(x: &mut T)` | Mutates the caller's value — argument mutation |
+| `fn f(...) -> ()` with a body that does work | Almost certainly a side effect; where did the result go? |
+| `async fn` | I/O by construction — boundary only |
+| `fn f(...) -> Result<T, E>` | Honest about failure — positive signal |
+| `unsafe fn` | Cannot be reasoned about as pure; flag in domain code |
+
+`&self` is not a purity *proof* — interior mutability (below) mutates through a shared reference. Check for it explicitly.
+
+### Impurity signals
+
+```rust
+// Clock reads
+std::time::SystemTime::now();
+std::time::Instant::now();
+chrono::Utc::now();
+
+// Random reads
+rand::random::<u64>();
+rand::thread_rng().gen_range(0..10);
+uuid::Uuid::new_v4();
+
+// Environment / config reads
+std::env::var("API_KEY");
+std::env::args();
+
+// I/O — files
+std::fs::read_to_string("path");
+tokio::fs::write("path", data).await;
+
+// I/O — network / HTTP
+reqwest::get(url).await;
+client.post(url).send().await;
+
+// I/O — database
+sqlx::query!("SELECT ...").fetch_one(&pool).await;
+diesel::insert_into(orders::table).values(&order).execute(conn);
+
+// Logging / tracing (write-only side effect)
+tracing::info!("...");       // acceptable at boundary, flag inside domain logic
+println!("...");             // flag anywhere outside a binary's main or tests
+
+// Argument mutation
+fn enrich(order: &mut Order) {
+    order.status = Status::Confirmed;   // mutates the caller's value
+}
+
+// Interior mutability — mutation through a shared reference; defeats &self
+use std::cell::RefCell;
+self.cache.borrow_mut().insert(key, value);
+self.counter.fetch_add(1, Ordering::SeqCst);
+self.lock.lock().unwrap().push(item);
+static INIT: OnceCell<Config> = OnceCell::new();
+
+// Global mutable state
+static mut COUNTER: u64 = 0;
+lazy_static! { static ref CACHE: Mutex<HashMap<String, String>> = ...; }
+
+// Panic as control flow — a hidden effect the signature denies
+let order = repo.find(id).unwrap();
+let parsed: u32 = raw.parse().expect("must be numeric");
+panic!("unreachable");   // on a reachable path
+```
+
+### Pure function markers
+
+```rust
+// Newtype value objects — structural equality, no identity
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Money { amount: i64, currency: Currency }
+
+// Consumes and returns; no mutation observable by the caller
+impl Order {
+    pub fn confirm(self) -> Order {
+        Order { status: Status::Confirmed, ..self }
+    }
+}
+
+// Typed, exhaustive failure in the return type
+fn validate(request: OrderRequest) -> Result<Order, ValidationError>;
+fn find_by_email(email: &Email, index: &CustomerIndex) -> Option<&Customer>;
+
+// Effects injected as traits — the function stays a function of its arguments
+fn schedule_retry(order: &Order, clock: &impl Clock) -> RetryPlan;
+
+// const fn is compiler-proven pure
+const fn tax_rate_for(region: Region) -> Rate;
+
+// #[must_use] proves the result is the point, not a side effect
+#[must_use]
+fn apply_discount(price: Money, discount: Discount) -> Money;
+
+// Iterator pipeline instead of a mutable accumulator
+let total: Money = lines.iter().filter(|l| l.is_taxable()).map(Line::subtotal).sum();
+```
+
+### Rust-specific verification questions
+
+Add these to the Analysis 1 checklist for every changed Rust function:
+
+```
+□ Does it take &mut on self or any argument? Is that mutation the point of the function, or an accident?
+□ Does it use RefCell / Cell / Mutex / RwLock / atomics / OnceCell — mutation hidden behind &self?
+□ Does it call unwrap() / expect() / panic! on a path a caller can reach?
+□ Is it async, or does it await? If so, is it in an adapter module rather than domain?
+□ Does it read a clock, RNG, or env var directly instead of taking a trait?
+□ Does it reach for unsafe?
+□ Does the error type erase information (anyhow::Error / Box<dyn Error>) where the caller must branch on the failure?
+```
+
+A changed function that trades `Result<T, DomainError>` for `anyhow::Result<T>` inside the domain is a regression even though it still compiles — flag it as a violation of honest signatures.
+
+---
+
 ## Boundary Layer Identification
 
 A function is an acceptable I/O boundary if **all** of the following hold:
@@ -241,5 +365,10 @@ A function is an acceptable I/O boundary if **all** of the following hold:
 2. All domain logic it calls is pure — the I/O wraps pure functions, not the reverse.
 3. Its tests isolate the I/O with test doubles (in-memory store, stub clock, fake HTTP server).
 4. Its name or package makes the side effect obvious (`UserRepository`, `EmailSender`, `OrderController`).
+
+In Rust the layer boundary is usually a module or crate split — `domain/` or a `-core` crate that
+depends on neither `tokio` nor `sqlx` nor `reqwest`, with adapters in `infra/`, `adapters/`, or a
+separate `-api` crate. A new I/O dependency appearing in the domain crate's `Cargo.toml` is itself a
+finding: check the manifest diff, not just the source diff.
 
 If these conditions are not met, the function is an **Impure — violation**, even if it lives at the edge of the codebase.

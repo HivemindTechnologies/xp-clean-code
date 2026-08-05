@@ -9,8 +9,9 @@ description: >-
   "implement feature", "add tests", "refactor", "write a spec", "acceptance
   criteria", "Given/When/Then", "TDD", "BDD", "domain model", "value
   object", "aggregate", "pure function", "side effect", "referential
-  transparency", "idempotent", "monad", "Either", "Option", "type hint",
-  "type annotation", "mypy", "pyright", or any request to build something
+  transparency", "idempotent", "monad", "Either", "Option", "Result",
+  "newtype", "type hint", "type annotation", "mypy", "pyright", "clippy",
+  or any request to build something
   non-trivial. Composes cleanly with Karpathy-style
   behavioural guidelines: where those address how an agent should reason,
   this skill addresses how code should be built.
@@ -43,6 +44,7 @@ Each phase is complete before the next begins. Mixing them is the primary source
 - If asked to implement something, write the test first. If the user hasn't provided a spec, derive one and confirm it before writing any test.
 - "Minimum code to go green" means exactly that. No helper methods, no abstractions, no configuration that the test doesn't exercise.
 - A test that never fails proves nothing. Always verify the test fails before making it pass.
+- This applies with full force to guards. When the code you are adding is a check — a validation, an authorisation test, a retry limit, an idempotency key — the test that demands it must fail when the guard is removed. If you cannot make it fail, the guard is untested or unreachable, and you do not yet get to claim it protects anything. The pr-validation skill enforces this on the way out; enforce it on the way in.
 
 ---
 
@@ -219,6 +221,14 @@ def charge(cardNumber: String, amount: Double): Unit
 def charge(card: CardNumber, amount: Money): ChargeResult
 ```
 
+```rust
+// Bad — two Strings and a float; the compiler cannot stop you swapping them
+fn charge(card_number: String, currency: String, amount: f64) -> bool;
+
+// Good — newtypes make the wrong call a compile error
+fn charge(card: CardNumber, amount: Money) -> Result<Receipt, ChargeError>;
+```
+
 #### Entities have identity, not structural equality
 An `Order` is the same order whether its status is `PENDING` or `CONFIRMED`. Model identity explicitly. Never compare entities by field value.
 
@@ -330,6 +340,120 @@ def processPayment(order: Order, card: CardNumber): Either[PaymentError, Receipt
 
 The happy path reads linearly. Error handling is structural, not scattered across catch blocks.
 
+Rust's `?` operator is the same construct: each fallible step short-circuits, and the happy path stays linear.
+
+```rust
+fn process_payment(order: &Order, card: CardNumber) -> Result<Receipt, PaymentError> {
+    let validated = validate_card(card)?;
+    let charged   = charge(validated, order.total())?;
+    Receipt::try_from(charged)
+}
+```
+
+#### Rust: newtypes, ownership, and honest signatures
+
+Rust gives you most of this discipline mechanically — but only if you use the type system rather than working around it.
+
+**Newtypes with smart constructors.** A tuple struct with a private field is the value object: the only way to obtain one is through a constructor that enforces the invariant, so every downstream function can trust it.
+
+```rust
+// Bad — validation must be repeated at every call site
+pub fn charge(email: String, amount: u64) -> Result<Receipt, ChargeError>;
+
+// Good — invariants proven once, at construction
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Email(String);           // field private to the module
+
+impl Email {
+    pub fn parse(raw: &str) -> Result<Self, ValidationError> {
+        if raw.contains('@') {
+            Ok(Self(raw.to_owned()))
+        } else {
+            Err(ValidationError::MalformedEmail)
+        }
+    }
+
+    pub fn as_str(&self) -> &str { &self.0 }
+}
+```
+
+Derive `PartialEq`/`Eq` for value objects — structural equality *is* the definition. Entities get identity instead: implement `PartialEq` on the id field alone, or don't derive it at all.
+
+**Transformations return new values.** Take `self` and return `Self`; reach for `&mut self` only when profiling or an external API demands it.
+
+```rust
+// Good — consumes and returns; the old value is gone, not stale
+impl Order {
+    pub fn confirm(self) -> Order {
+        Order { status: Status::Confirmed, ..self }
+    }
+}
+
+// Justify this — the caller can now observe a half-updated Order
+impl Order {
+    pub fn confirm_in_place(&mut self) { self.status = Status::Confirmed; }
+}
+```
+
+**Errors are typed and exhaustive.** Model failure as an enum, one variant per distinct failure mode, so `match` at the boundary is checked by the compiler.
+
+```rust
+#[derive(Debug, thiserror::Error, PartialEq)]
+pub enum PaymentError {
+    #[error("card expired on {expiry}")]
+    CardExpired { expiry: YearMonth },
+    #[error("gateway timed out after {0:?}")]
+    GatewayTimeout(Duration),
+    #[error("insufficient funds: {shortfall} short")]
+    InsufficientFunds { shortfall: Money },
+}
+```
+
+Use `anyhow::Error` only in binaries and at the outermost shell — never as a domain function's error type, because it erases exactly the information the caller needs to decide what to do.
+
+**Banned in domain code:**
+
+| Construct | Why | Instead |
+|---|---|---|
+| `unwrap()`, `expect()` | Turns a typed failure into a crash | Propagate with `?` |
+| `panic!`, `todo!` on a reachable path | Unchecked control flow | Return `Err` |
+| `RefCell`, `Mutex`, `OnceCell`, `static mut` | Hidden mutable state; breaks referential transparency | Pass state in, return it out |
+| `SystemTime::now()`, `rand::random()`, `env::var` | Ambient input — the function is no longer a function of its arguments | Inject a `Clock` / `Rng` / config trait |
+| `unsafe` | Escapes every guarantee above | Nothing, in domain logic |
+
+`expect()` is acceptable in tests, in `main`, and in `#[cfg(test)]` fixtures — those are the shell.
+
+**Iterator pipelines over mutable accumulation.** This is Principle 7's function composition in Rust's idiom.
+
+```rust
+// Bad — a mutable accumulator and a loop that must be read to be understood
+let mut total = Money::ZERO;
+for line in order.lines() {
+    if line.is_taxable() {
+        total = total + line.subtotal() * TAX_RATE;
+    }
+}
+
+// Good — the pipeline states the intent
+let total: Money = order
+    .lines()
+    .filter(|line| line.is_taxable())
+    .map(|line| line.subtotal() * TAX_RATE)
+    .sum();
+```
+
+**Enforce it in CI.** Types alone don't stop `unwrap()`; lints do.
+
+```toml
+# Cargo.toml — deny at the crate level, allow deliberately and locally
+[lints.clippy]
+unwrap_used   = "deny"
+expect_used   = "deny"
+panic         = "deny"
+```
+
+Run `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` in CI. An `#[allow(...)]` is a decision that needs a `// why:` comment next to it, exactly like any other deviation from these defaults.
+
 #### Declarative types in dynamically typed languages
 
 Type annotations in Python and similar languages are not enforced at runtime, but they are a first-class requirement. They are the machine-readable contract of every function — enabling static analysis, IDE support, and early error detection via mypy or pyright. An unannotated function is a build failure, not a style issue. Run `mypy --strict` or `pyright` in CI.
@@ -433,6 +557,8 @@ Effects:            Push I/O to the boundary; model with Option / Either / IO
 Composition:        map/flatMap over mutation; pipelines over sequential statements
 Idempotency:        Write a scenario for double-application of every state transition
 Typing:             Annotate every signature in dynamic languages; unannotated = build failure
+Rust:               Newtypes with private fields; typed error enums; propagate with ?;
+                    no unwrap/expect/RefCell/now() in domain code — deny them in Cargo.toml
 
 Comments:           Why, never what
 ```

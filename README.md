@@ -1,6 +1,6 @@
 # xp-clean-code
 
-A Claude Code skill that brings Extreme Programming and Clean Code discipline to AI-assisted development.
+Claude Code plugins that bring Extreme Programming and Clean Code discipline to AI-assisted development: one for how code gets built, one for validating that a pull request lives up to it.
 
 -----
 
@@ -59,18 +59,41 @@ curl https://raw.githubusercontent.com/HivemindTechnologies/xp-clean-code/main/p
 ## What’s included
 
 ```
-plugins/xp-clean-code/               # plugin root
+plugins/xp-clean-code/                    # how to build
 ├── .claude-plugin/
-│   └── plugin.json                   # Plugin manifest
+│   └── plugin.json                       # Plugin manifest
 └── skills/
     └── xp-clean-code/
-        ├── SKILL.md                  # Core principles — loaded by Claude Code
+        ├── SKILL.md                      # Core principles — loaded by Claude Code
         └── references/
-            ├── testing-patterns.md   # Framework examples: Scala, Java, Python, PySpark, TypeScript
-            └── scenario-examples.md  # Worked BDD scenarios across common problem types
+            ├── testing-patterns.md       # Framework examples: Scala, Java, Python, PySpark,
+            │                             #   TypeScript, Rust, Gherkin
+            └── scenario-examples.md      # Worked BDD scenarios across common problem types
+
+plugins/pr-validation/                    # verifying what was built
+├── .claude-plugin/
+│   └── plugin.json
+├── commands/
+│   └── pr-validate.md                    # /pr-validate — runs the check against a GitHub PR
+└── skills/
+    └── pr-validation/
+        ├── SKILL.md                      # The four analyses — loaded by Claude Code
+        └── references/
+            ├── purity-checklist.md       # Impurity signals: Python, Scala, Java, TypeScript, Rust
+            ├── gap-patterns.md           # Ten coverage gap patterns, with before/after scenarios
+            └── claim-verification.md     # Mutation catalogue for the removal check
 ```
 
 The reference files are loaded on demand. `SKILL.md` stays lean in context; the detail is there when Claude needs it.
+
+### The pr-validation plugin
+
+Where `xp-clean-code` governs how to build, `pr-validation` checks that what was built holds up. Run `/pr-validate` on a PR — or ask Claude to review one — and it produces a structured report across four analyses:
+
+1. **Purity** — every changed function classified as Pure, Impure–boundary, or Impure–violation.
+1. **Idempotency** — every state transition checked for `f(f(x)) = f(x)`, and for a double-application scenario.
+1. **BDD coverage** — a coverage matrix mapping changed functions to scenarios: happy path, each failure mode, each branch, each boundary.
+1. **Protection claims** — for every assertion the PR body makes about what a check protects against, the mapped test is run with that protection removed. If it still passes, the claim is unsubstantiated: the guard is untested, unreachable, or the test passes for an unrelated reason. A protection claim nobody can break is a promise the suite does not keep.
 
 -----
 

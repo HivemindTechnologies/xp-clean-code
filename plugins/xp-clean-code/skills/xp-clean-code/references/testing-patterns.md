@@ -328,6 +328,181 @@ describe('PaymentProcessor', () => {
 
 ---
 
+## Rust (cargo test + rstest + proptest)
+
+Unit tests live in a `#[cfg(test)] mod tests` block beside the code; integration tests live in `tests/`. Use nested `mod` blocks to group scenarios by their `Given`.
+
+```rust
+// Scenario: Given a product with 10 units in stock, When an order for 3 units is placed,
+//           Then the stock level is 7
+#[cfg(test)]
+mod order_placement {
+    use super::*;
+
+    #[test]
+    fn placing_valid_order_decrements_stock() {
+        // Given
+        let product = Product::new(Sku::new("SKU-001"), StockLevel(10));
+        let order = Order::new(&product, Quantity(3));
+
+        // When
+        let placed = product.place(&order).expect("order should be accepted");
+
+        // Then
+        assert_eq!(placed.stock_level(), StockLevel(7));
+    }
+
+    #[test]
+    fn placing_order_with_insufficient_stock_is_rejected() {
+        // Given
+        let product = Product::new(Sku::new("SKU-001"), StockLevel(2));
+        let order = Order::new(&product, Quantity(5));
+
+        // When
+        let result = product.place(&order);
+
+        // Then
+        assert_eq!(result, Err(OrderError::InsufficientStock { available: StockLevel(2) }));
+
+        // And the original product is untouched — ownership makes this structural
+        assert_eq!(product.stock_level(), StockLevel(2));
+    }
+}
+```
+
+**Assert on the error variant, never on a panic message.** `Result` is the honest signature; reserve `#[should_panic]` for genuine invariant violations.
+
+```rust
+// Bad — couples the test to a message string
+#[test]
+#[should_panic(expected = "insufficient stock")]
+fn rejects_oversized_order() { /* ... */ }
+
+// Good — asserts the typed outcome
+#[test]
+fn rejects_oversized_order() {
+    let result = product.place(&order);
+    assert!(matches!(result, Err(OrderError::InsufficientStock { .. })));
+}
+```
+
+**Fixtures and parameterised cases with `rstest`:**
+```rust
+use rstest::{fixture, rstest};
+
+#[fixture]
+fn gold_customer() -> Customer {
+    Customer::new(CustomerId::new("C-1"), LoyaltyTier::Gold)
+}
+
+#[rstest]
+#[case(LoyaltyTier::Standard, Money::eur(100), Money::eur(0))]
+#[case(LoyaltyTier::Gold,     Money::eur(100), Money::eur(10))]
+#[case(LoyaltyTier::Platinum, Money::eur(100), Money::eur(20))]
+fn applies_correct_discount_per_loyalty_tier(
+    #[case] tier: LoyaltyTier,
+    #[case] order_total: Money,
+    #[case] expected_discount: Money,
+) {
+    // Given a customer on the given tier
+    let customer = Customer::new(CustomerId::new("C-1"), tier);
+
+    // When the discount is calculated
+    let discount = calculate_discount(&customer, order_total);
+
+    // Then the discount matches the tier
+    assert_eq!(discount, expected_discount);
+}
+
+#[rstest]
+fn gold_customer_discount_excludes_delivery_fee(gold_customer: Customer) {
+    // Given (fixture) a GOLD customer, and an order with a delivery fee
+    let order = Order::of(Money::eur(100)).with_delivery_fee(Money::eur(5));
+
+    // When
+    let total = final_price(&gold_customer, &order);
+
+    // Then the discount applies to goods only
+    assert_eq!(total, Money::eur(95));
+}
+```
+
+**Property tests for referential transparency and idempotency (`proptest`):**
+```rust
+use proptest::prelude::*;
+
+proptest! {
+    // Scenario: Confirming an already-confirmed order is a no-op
+    #[test]
+    fn confirm_is_idempotent(order in any_order()) {
+        let once  = confirm(order.clone());
+        let twice = confirm(once.clone());
+        prop_assert_eq!(once, twice);
+    }
+
+    // Scenario: A discount never produces a negative price
+    #[test]
+    fn discount_never_yields_negative_price(
+        price in 0u64..1_000_000,
+        rate  in 0.0f64..=1.0,
+    ) {
+        let result = apply_discount(Money::cents(price), Discount::new(rate)?);
+        prop_assert!(result >= Money::ZERO);
+    }
+}
+```
+
+Property tests are the natural expression of a pure function's contract: they assert the law, not one sampled example. Use them for round-trips (`parse(render(x)) == x`), idempotency, and invariants — never as a substitute for the named scenario tests that document behaviour.
+
+**Effects at the boundary — inject the clock and the store as traits:**
+```rust
+// Domain trait, implemented by a real adapter in production and a stub in tests
+pub trait Clock {
+    fn now(&self) -> DateTime<Utc>;
+}
+
+pub struct FixedClock(pub DateTime<Utc>);
+
+impl Clock for FixedClock {
+    fn now(&self) -> DateTime<Utc> { self.0 }
+}
+
+#[test]
+fn schedules_retry_sixty_seconds_after_the_timeout() {
+    // Given a gateway that times out, and a clock fixed at 10:00:00
+    let clock = FixedClock(datetime("2026-01-01T10:00:00Z"));
+    let gateway = TimingOutGateway::new(Duration::from_secs(5));
+
+    // When the payment is processed
+    let result = process_payment(&order_pending(), &valid_card(), &gateway, &clock);
+
+    // Then a retry is scheduled for 10:01:00
+    assert_eq!(
+        result.scheduled_retry(),
+        Some(datetime("2026-01-01T10:01:00Z")),
+    );
+}
+```
+
+A test that needs `tokio` is testing the shell, not the core. Keep those few and mark them explicitly:
+```rust
+#[tokio::test]
+async fn repository_round_trips_a_saved_order() {
+    let repo = InMemoryOrderRepository::default();   // fake, not a mock
+    repo.save(order_pending()).await.unwrap();
+    assert_eq!(repo.find(&OrderId::new("O-1")).await.unwrap(), Some(order_pending()));
+}
+```
+
+**Test names carry the scenario.** `cargo test` prints the full path, so the module name supplies the `Given`:
+```
+order_placement::placing_valid_order_decrements_stock
+order_placement::placing_order_with_insufficient_stock_is_rejected
+payment::given_expired_card::keeps_order_pending
+```
+
+---
+
 ## Cucumber / Gherkin (for cross-cutting acceptance tests)
 
 When acceptance tests need to be readable by non-engineers (product owners, QA), use Gherkin `.feature` files.
@@ -353,7 +528,7 @@ Feature: Order placement
       | -1       | quantity must be positive |
 ```
 
-Map Gherkin steps to JUnit 5 (via Cucumber-JVM) or pytest-bdd as appropriate.
+Map Gherkin steps to JUnit 5 (via Cucumber-JVM), pytest-bdd, or `cucumber-rs` as appropriate.
 
 ---
 
@@ -366,6 +541,11 @@ Map Gherkin steps to JUnit 5 (via Cucumber-JVM) or pytest-bdd as appropriate.
 orderService_givenExpiredCard_returnsCardExpiredError
 pipeline_givenLateEvent_dropsItFromWindow
 authMiddleware_givenMissingToken_returns401
+```
+
+In snake_case languages, the module supplies the unit and the condition:
+```
+order_service::given_expired_card::returns_card_expired_error
 ```
 
 ### Arrange–Act–Assert vs Given–When–Then
