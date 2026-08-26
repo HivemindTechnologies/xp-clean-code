@@ -1,6 +1,6 @@
 # xp-clean-code
 
-Claude Code plugins that bring Extreme Programming and Clean Code discipline to AI-assisted development: one for how code gets built, one for validating that a pull request lives up to it.
+Plugins that bring Extreme Programming and Clean Code discipline to AI-assisted development: one for how code gets built, one for validating that a pull request lives up to it. Works with **Cursor** (Team Marketplace) and **Claude Code**.
 
 -----
 
@@ -29,7 +29,31 @@ It encodes eight principles:
 
 ## Installation
 
-**As a Claude Code plugin (recommended — applies across all projects):**
+### Cursor (Team Marketplace)
+
+Requires a Cursor Teams or Enterprise plan and admin access.
+
+1. Push these changes so `main` includes `.cursor-plugin/marketplace.json`.
+2. Open **Dashboard → Settings → Plugins**.
+3. Under **Team Marketplaces**, choose **Import Marketplace** / **Import from Repo**.
+4. Paste: `https://github.com/HivemindTechnologies/xp-clean-code`
+5. Confirm both plugins (`xp-clean-code`, `pr-validation`) are detected, then save.
+
+For private repos, install the Cursor GitHub App on the org/repo first (**Dashboard → Integrations**). Enable **Auto Refresh** if you want pushes to re-index the marketplace.
+
+**Personal / local (no Team Marketplace):** symlink skills into `~/.cursor/skills/`:
+
+```bash
+mkdir -p ~/.cursor/skills
+ln -s "$(pwd)/plugins/xp-clean-code/skills/xp-clean-code" ~/.cursor/skills/xp-clean-code
+ln -s "$(pwd)/plugins/pr-validation/skills/pr-validation" ~/.cursor/skills/pr-validation
+```
+
+Or load a plugin from `~/.cursor/plugins/local/` (symlink a plugin directory that contains `.cursor-plugin/plugin.json`).
+
+### Claude Code
+
+**As a plugin (recommended — applies across all projects):**
 
 Add the repo as a plugin source in `~/.claude/settings.json`:
 
@@ -60,12 +84,19 @@ curl https://raw.githubusercontent.com/HivemindTechnologies/xp-clean-code/main/p
 ## What’s included
 
 ```
+.cursor-plugin/
+└── marketplace.json                      # Cursor Team Marketplace index
+.claude-plugin/
+└── marketplace.json                      # Claude Code marketplace index
+
 plugins/xp-clean-code/                    # how to build
+├── .cursor-plugin/
+│   └── plugin.json                       # Cursor plugin manifest
 ├── .claude-plugin/
-│   └── plugin.json                       # Plugin manifest
+│   └── plugin.json                       # Claude Code plugin manifest
 └── skills/
     └── xp-clean-code/
-        ├── SKILL.md                      # Core principles — loaded by Claude Code
+        ├── SKILL.md                      # Core principles — loaded on demand
         └── references/
             ├── testing-patterns.md       # Framework examples: Scala, Java, Python, PySpark,
             │                             #   TypeScript, Rust, Gherkin
@@ -74,13 +105,15 @@ plugins/xp-clean-code/                    # how to build
             └── scenario-examples.md      # Worked BDD scenarios across common problem types
 
 plugins/pr-validation/                    # verifying what was built
+├── .cursor-plugin/
+│   └── plugin.json
 ├── .claude-plugin/
 │   └── plugin.json
 ├── commands/
 │   └── pr-validate.md                    # /pr-validate — runs the check against a GitHub PR
 └── skills/
     └── pr-validation/
-        ├── SKILL.md                      # The four analyses — loaded by Claude Code
+        ├── SKILL.md                      # The four analyses — loaded on demand
         └── references/
             ├── purity-checklist.md       # Impurity signals + absence-vs-failure signals:
             │                             #   Python, Scala, Java, TypeScript, Rust
@@ -88,7 +121,7 @@ plugins/pr-validation/                    # verifying what was built
             └── claim-verification.md     # Mutation catalogue for the removal check
 ```
 
-The reference files are loaded on demand. `SKILL.md` stays lean in context; the detail is there when Claude needs it.
+The reference files are loaded on demand. `SKILL.md` stays lean in context; the detail is there when the agent needs it.
 
 ### The pr-validation plugin
 
