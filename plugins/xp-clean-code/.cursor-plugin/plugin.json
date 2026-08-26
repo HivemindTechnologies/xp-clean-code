@@ -1,0 +1,10 @@
+{
+  "name": "xp-clean-code",
+  "displayName": "XP Clean Code",
+  "description": "Extreme Programming and Clean Code discipline for software development",
+  "version": "1.2.0",
+  "author": {
+    "name": "Hivemind Technologies",
+    "email": "info@hivemindtechnologies.com"
+  }
+}

@@ -1,22 +1,24 @@
 {
   "name": "xp-clean-code",
+  "displayName": "XP Clean Code",
   "owner": {
     "name": "Hivemind Technologies",
     "email": "info@hivemindtechnologies.com"
   },
   "metadata": {
     "description": "XP and clean code practices for Cursor and Claude Code",
-    "version": "1.2.0"
+    "version": "1.2.0",
+    "pluginRoot": "plugins"
   },
   "plugins": [
     {
       "name": "xp-clean-code",
-      "source": "./plugins/xp-clean-code",
-      "description": "XP oriented and clean code guidelines for gen AI assisted coding with claude code"
+      "source": "xp-clean-code",
+      "description": "XP oriented and clean code guidelines for gen AI assisted coding"
     },
     {
       "name": "pr-validation",
-      "source": "./plugins/pr-validation",
+      "source": "pr-validation",
       "description": "Pull request validation for function purity, idempotency, BDD scenario coverage, and protection claims backed by tests"
     }
   ]
