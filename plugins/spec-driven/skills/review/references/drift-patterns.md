@@ -46,9 +46,16 @@ are stale by the time the record is read.
 | **Exit gate unmeasured** | a milestone marked complete with no recorded evidence against its gate | milestone |
 | **Design says X, code does Y** | a documented behaviour the code contradicts | section; symbol |
 
+## Verdicts
+
+Every pattern in A–D receives one of: **finding** (with evidence), **none found**, or **not
+applicable** (no subject exists — zero specs makes *mirror drift* N/A). Not applicable is
+recorded so a reader knows it was not skipped, and it is never a pass.
+
 ## E · Open questions and risks
 
-Not drift, but the review is the only stage that looks across everything, so it collects them:
+Not drift, and collected in the review's Step 4 rather than Step 3, but the review is the only
+stage that looks across everything, so it owns them:
 
 - `TODO` / `deferred` / `open` / `⏳` markers older than one milestone, with no backlog row.
 - Hypotheses in the brief with no evidence gathered yet, and how many iterations have shipped

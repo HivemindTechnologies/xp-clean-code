@@ -22,7 +22,12 @@ or a review record, and the operative doc links there.
 | Hard rules / invariants | ≤ 30 | numbered; each one testable or reviewable |
 | Domain model table | 1 line per term | terms **as built**, status column; a term not built is ⏳ with a one-line reason |
 | Current status | ≤ 20 | milestone, spec in `building`, next iteration, open blockers; **no dates older than the current spec** |
-| **Total** | **≤ 200** | the review skill flags the doc when it exceeds this or when the status section carries history |
+| Any other section (a boundary contract, an architecture sketch) | counts against the total | allowed only if it is an invariant; a diagram is ≤ 15 lines or a link to `DESIGN.md` |
+| **Total** | **≤ 200 lines and ≤ 16,000 characters** | the review skill flags the doc when it exceeds either, or when the status section carries history |
+
+Lines are the convenient measure; the cost being protected is tokens. So a table row longer than
+~200 characters is a finding even when the line count passes — a 59-row domain table on 93
+lines can be the second-heaviest section in the file.
 
 ## Template
 

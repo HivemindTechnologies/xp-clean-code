@@ -22,11 +22,18 @@ spec alone is authoritative and no feature file need exist yet.
 from __future__ import annotations
 
 import difflib
+import os
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+# The project root: the directory holding `docs/` and `tests/`. As a test file under `tests/`
+# that is one level up; when run as a script from elsewhere (a review over another checkout),
+# pass the root as the first argument or set SPEC_SYNC_ROOT, so the guard never silently
+# inspects the wrong tree and prints nothing.
+_ROOT_OVERRIDE = sys.argv[1] if __name__ == "__main__" and len(sys.argv) > 1 else os.environ.get("SPEC_SYNC_ROOT")
+ROOT = Path(_ROOT_OVERRIDE).resolve() if _ROOT_OVERRIDE else Path(__file__).resolve().parents[1]
 SPECS_DIR = ROOT / "docs" / "specs"
 
 CHECKED_STATES = {"building", "shipped", "reconciled"}
@@ -93,20 +100,38 @@ class Spec:
     scenarios: dict[str, Scenario]
 
 
-def read_spec(path: Path) -> Spec:
+def read_spec(path: Path) -> Spec | str:
+    """The spec, or a one-line problem when its header does not follow the template.
+
+    A malformed header is reported beside the other drift rather than raised: one badly-headed
+    file must not stop the other specs from being checked.
+    """
     text = path.read_text(encoding="utf-8")
     status = _STATUS.search(text)
-    assert status is not None, f"{path.name}: no `**Status:**` line in the header"
+    if status is None:
+        return f"{path.name}: no parseable `**Status:** <state>` line (see spec-template.md)"
     files_line = _FEATURE_FILES.search(text)
     files = tuple(ROOT / f for f in _BACKTICKED.findall(files_line.group(1))) if files_line else ()
     gherkin = "\n".join(block for block in _GHERKIN_BLOCK.findall(text))
     return Spec(path, status.group(1), files, scenarios_in(gherkin))
 
 
-def checked_specs() -> list[Spec]:
+def load_specs() -> tuple[list[Spec], list[str]]:
+    """Every spec under docs/specs/ that the mirror applies to, and the header problems found."""
     if not SPECS_DIR.exists():
-        return []
-    return [s for s in map(read_spec, sorted(SPECS_DIR.glob("*.md"))) if s.status in CHECKED_STATES]
+        return [], []
+    specs: list[Spec] = []
+    problems: list[str] = []
+    for loaded in map(read_spec, sorted(SPECS_DIR.glob("*.md"))):
+        if isinstance(loaded, str):
+            problems.append(loaded)
+        elif loaded.status in CHECKED_STATES:
+            specs.append(loaded)
+    return specs, problems
+
+
+def checked_specs() -> list[Spec]:
+    return load_specs()[0]
 
 
 def _step_diff(spec_side: Scenario, file_side: Scenario) -> str:
@@ -142,7 +167,8 @@ def mirror_problems(spec: Spec) -> list[str]:
 
 
 def test_every_checked_spec_mirrors_its_feature_files() -> None:
-    problems = [p for spec in checked_specs() for p in mirror_problems(spec)]
+    specs, header_problems = load_specs()
+    problems = header_problems + [p for spec in specs for p in mirror_problems(spec)]
     assert not problems, "spec ⇄ feature-file drift:\n\n" + "\n\n".join(problems)
 
 
@@ -164,9 +190,19 @@ def unowned_feature_files() -> list[Path]:
     return sorted(f for f in features_dir.glob("*.feature") if f not in owned)
 
 
-if __name__ == "__main__":  # `python spec-sync-guard.py` prints the review-mode summary
-    for spec in checked_specs():
-        for problem in mirror_problems(spec):
-            print("DRIFT:", problem)
-    for path in unowned_feature_files():
+if __name__ == "__main__":
+    # `python spec-sync-guard.py [project-root]` — the review skill's summary: counts first, so a
+    # tree with no specs says so instead of printing nothing; exit 1 on any drift.
+    specs, header_problems = load_specs()
+    drift = header_problems + [p for spec in specs for p in mirror_problems(spec)]
+    unowned = unowned_feature_files()
+    owned = {f for spec in specs for f in spec.feature_files}
+    print(f"root: {ROOT}")
+    print(f"specs dir: {'present' if SPECS_DIR.exists() else 'ABSENT'}; "
+          f"{len(specs)} spec(s) in a checked state; {len(header_problems)} malformed header(s)")
+    print(f"feature files: {len(owned)} owned, {len(unowned)} unowned")
+    for problem in drift:
+        print("DRIFT:", problem)
+    for path in unowned:
         print("UNOWNED:", path.relative_to(ROOT))
+    sys.exit(1 if drift else 0)
