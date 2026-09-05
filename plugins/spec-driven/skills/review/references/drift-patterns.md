@@ -9,7 +9,8 @@ are stale by the time the record is read.
 | Pattern | Signal | Evidence to record |
 |---|---|---|
 | **History in the operative doc** | dated sentences, "fixed 2026-…", issue numbers narrated in the status section | count of dated lines; where each belongs (ADR / spec Reconciliation / review) |
-| **Over budget** | total lines or a section beyond `operative-context.md`'s budget | measured lines per section |
+| **Over budget** | total lines or characters beyond the budget **declared in the document** (`**Context budget:**` line), or beyond the defaults in `operative-context.md` when none is declared; a section beyond its default | measured lines and characters per section, against the budget in force |
+| **Unjustified budget** | a declared budget with no stated reason, or one raised without the review that motivated it | the declaration line; what the document holds that earned it, if anything |
 | **Unguarded checkable claim** | a number, version, schedule or owner stated in prose with no test reading the constant | the claim, the constant it should read, the guard to add |
 | **Stale claim** | a guarded or unguarded claim that is simply false against the code | the claim vs the measured value |
 | **Missing precedence rule** | no statement of which document wins on present-tense conflict | — |

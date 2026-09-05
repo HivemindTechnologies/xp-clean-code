@@ -14,20 +14,62 @@ or a review record, and the operative doc links there.
 
 ## Budget
 
-| Section | Lines (soft) | Hard rule |
+The budget is **declared by the project, in the document itself**, on one header line the review
+skill reads:
+
+```markdown
+**Context budget:** 350 lines · 28,000 characters — set at scaffolding (M1); raised 2026-09-05 for the 11 hard rules and 60-term domain model, see review 2026-09-05.
+```
+
+When no line is declared, the defaults below apply. A project declares a larger budget because
+it has more **invariants** to hold — more hard rules, a bigger ubiquitous language, a boundary
+contract with another system — never because it has more to say. The line names what earned the
+size, so a later reader can tell a justified budget from an inflated one.
+
+| Section | Default lines (soft) | Hard rule (budget-independent) |
 |---|---|---|
 | What this is | ≤ 15 | no research, no rationale — link `DESIGN.md` |
 | Document map + precedence rule | ≤ 15 | verbatim precedence rule from the sync contract |
 | Coding standards | ≤ 40 | the project-specific deltas on the xp-clean-code skill, not a copy of it |
 | Hard rules / invariants | ≤ 30 | numbered; each one testable or reviewable |
-| Domain model table | 1 line per term | terms **as built**, status column; a term not built is ⏳ with a one-line reason |
+| Domain model table | 1 line per term, ≤ ~200 chars each | terms **as built**, status column; a term not built is ⏳ with a one-line reason |
 | Current status | ≤ 20 | milestone, spec in `building`, next iteration, open blockers; **no dates older than the current spec** |
 | Any other section (a boundary contract, an architecture sketch) | counts against the total | allowed only if it is an invariant; a diagram is ≤ 15 lines or a link to `DESIGN.md` |
-| **Total** | **≤ 200 lines and ≤ 16,000 characters** | the review skill flags the doc when it exceeds either, or when the status section carries history |
+| **Total** | **default ≤ 200 lines and ≤ 16,000 characters; or the declared budget** | the review skill flags the doc when it exceeds the budget in force, or when the status section carries history |
 
-Lines are the convenient measure; the cost being protected is tokens. So a table row longer than
-~200 characters is a finding even when the line count passes — a 59-row domain table on 93
-lines can be the second-heaviest section in the file.
+Sizing guidance for the declaration, by what the document must hold:
+
+| Project shape | Suggested total |
+|---|---|
+| One bounded context, ≤ 5 hard rules, ≤ 20 domain terms | 200 lines · 16k chars (the default) |
+| Several external boundaries, ≤ 12 hard rules, ≤ 60 terms | 300–400 lines · 24–32k chars |
+| Multiple bounded contexts in one repo | split the document per context instead of raising the budget |
+
+Two rules do not scale with the budget: **no history** (a dated sentence belongs in an ADR, a
+Reconciliation or a review, whatever the budget), and **no copy of a skill** the agent already
+loads. Lines are the convenient measure; the cost being protected is tokens, so a table row
+longer than ~200 characters is a finding even when the line count passes — a 59-row domain
+table on 93 lines can be the second-heaviest section in the file.
+
+Enforce the budget mechanically alongside the other checkable claims:
+
+```python
+# in tests/test_docs_are_current.py
+_BUDGET = re.compile(r"\*\*Context budget:\*\*\s*([\d,]+) lines\s*·\s*([\d,]+) characters")
+
+def test_the_operative_doc_is_within_its_declared_budget() -> None:
+    text = _CLAUDE.read_text()
+    declared = _BUDGET.search(text)
+    max_lines, max_chars = (
+        (int(declared.group(1).replace(",", "")), int(declared.group(2).replace(",", "")))
+        if declared else (200, 16_000)
+    )
+    lines, chars = text.count("\n") + 1, len(text)
+    assert lines <= max_lines and chars <= max_chars, (
+        f"CLAUDE.md is {lines} lines / {chars} chars against a budget of "
+        f"{max_lines} / {max_chars} — move history out, or raise the budget and say why"
+    )
+```
 
 ## Template
 
@@ -36,6 +78,8 @@ lines can be the second-heaviest section in the file.
 
 This is the operative, per-session context: the invariants that hold on every commit and the
 scope of the **current iteration only**. Deliberately lean; read in full before acting.
+
+**Context budget:** 200 lines · 16,000 characters — set at scaffolding (M1).
 
 | Document | Holds | Read when |
 |---|---|---|

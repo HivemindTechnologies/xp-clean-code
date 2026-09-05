@@ -92,8 +92,9 @@ spec skill as terms are built. A term with no introducing iteration stays in the
 
 ### Step 6 — Write the operative context document
 
-`CLAUDE.md` (or `AGENTS.md`) under `operative-context.md`'s budget: what the project is in ≤ 15
-lines, the document map with the precedence rule verbatim, the coding standards as **deltas on
+`CLAUDE.md` (or `AGENTS.md`) under `operative-context.md`'s budget — declared on the document's
+own `**Context budget:**` line, sized by the invariants it must hold (its sizing table), the
+default when in doubt: what the project is in ≤ 15 lines, the document map with the precedence rule verbatim, the coding standards as **deltas on
 the xp-clean-code skill** (never a copy of it), the hard rules, the domain table, and a current
 status of ≤ 20 lines with no history. For every checkable claim it makes, add
 `tests/test_docs_are_current.py` reading the constant from the code.
@@ -145,6 +146,6 @@ separate conversation.
 □ Pin gate table filled; customer accepts before the blocked iteration opens
 □ Roadmap: Iteration 0 skeleton → one scenario per row → Introduces by first consumer → M2 title only
 □ Domain table seeded, all ⏳ with introducing iteration
-□ Operative doc ≤ 200 lines, no history, precedence rule verbatim, docs-current guard for each claim
+□ Operative doc within its declared budget (default 200 lines · 16k chars), no history, precedence rule verbatim, docs-current guard for each claim and for the budget
 □ Iteration 0 landed, CI green, and then STOP
 ```

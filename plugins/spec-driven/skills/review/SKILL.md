@@ -37,7 +37,7 @@ what decide it. Do not guess it from the directory listing.
 
 ### Step 1 — Inventory
 
-List what exists, with counts: operative doc (lines and characters, per section), `DESIGN.md`
+List what exists, with counts: operative doc (lines and characters, per section, against its **declared** `Context budget` line or the defaults when none is declared), `DESIGN.md`
 (sections; its document-level status line and any built/future labels — "none" if it has
 neither), `ROADMAP.md` (milestones, iterations by status), ADRs (by status), specs (by status),
 feature files (owned / unowned), test modules (bound / unbound), the guards present
@@ -173,8 +173,11 @@ spec.
   customer sequences; the review does not produce them.
 - **A retrofitted document describes what is built.** It never invents intent; inferred
   intent is marked *inferred*.
-- **The operative doc is held to its budget and to zero history.** This is the single most
-  valuable finding a review produces, because that document is loaded every session.
+- **The operative doc is held to its budget and to zero history.** The budget is the one the
+  document declares, or the default; a review may recommend raising it when the document holds
+  more invariants than the default fits, and must say what earned the increase. History is never
+  what earns it. This is the single most valuable finding a review produces, because that
+  document is loaded every session.
 
 ## What this skill refuses
 
