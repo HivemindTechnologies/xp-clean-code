@@ -10,12 +10,14 @@ description: >-
   "test coverage", "pure function check", "verify purity", "are my functions
   pure", "idempotency check", "verify idempotency", "is this idempotent",
   "verify claims", "PR body claims", "unsubstantiated claim", "mutation check",
-  "does this test actually fail", "what's missing from my tests". Composes with
-  the xp-clean-code skill: where that skill governs how to build, this skill
-  validates that what was built meets those standards.
+  "does this test actually fail", "what's missing from my tests", "is this in
+  the spec", "spec sync", "scope creep in this PR", "unauthorised scenario".
+  Composes with the xp-clean-code skill: where that skill governs how to build,
+  this skill validates that what was built meets those standards; and with the
+  spec-driven plugin, whose spec fences what a PR may build (Analysis 5).
 ---
 
-# PR Validation · Purity · Idempotency · BDD Coverage · Protection Claims
+# PR Validation · Purity · Idempotency · BDD Coverage · Protection Claims · Spec Sync
 
 This skill audits a pull request against the quality standards established in the xp-clean-code skill. It does not enforce how to build — it verifies that what was built meets the standards.
 
@@ -27,9 +29,9 @@ The rules here are non-negotiable defaults. Deviate only when the user explicitl
 
 ## How to Run This Validation
 
-1. Obtain the diff for the PR (changed files, hunks, line ranges) **and the PR body, title, and commit messages** — Analysis 4 validates the prose against the tests.
+1. Obtain the diff for the PR (changed files, hunks, line ranges) **and the PR body, title, and commit messages** — Analysis 4 validates the prose against the tests, and Analysis 5 reads the spec the body names.
 2. Identify every changed function, method, or procedure.
-3. Run each of the four analyses below independently.
+3. Run each of the five analyses below independently.
 4. Produce the structured gap report.
 
 Always work from the diff. Do not analyse unchanged code unless a changed function calls it and the call site is relevant to the analysis.
@@ -40,6 +42,11 @@ Always work from the diff. Do not analyse unchanged code unless a changed functi
 | 2 · Idempotency | Is every state transition safe to apply twice? |
 | 3 · BDD coverage | Does a scenario exercise every changed behaviour? |
 | 4 · Protection claims | Does every protection the PR body claims have a test that fails without it? |
+| 5 · Spec sync | Is every scenario and behaviour in the diff authorised by the spec the PR names, and is the spec's mirror intact? |
+
+Analysis 5 applies only to repositories that keep specs under `docs/specs/` (the spec-driven plugin's
+convention). Where that directory does not exist, report it as not applicable — explicitly, as with
+Analysis 4.
 
 ---
 
@@ -459,11 +466,91 @@ An unverified protection claim in a PR body is a defect in the PR, on the same f
 
 For worked examples of each mutation type, and for the claim-to-mutation mapping in Python, Scala, TypeScript, and Rust, see `references/claim-verification.md`.
 
+
+## Analysis 5: Spec Sync
+
+**Every scenario added or changed in the diff must be authorised by the spec the PR names, and the
+production changes must serve those scenarios and nothing else.**
+
+This is the diff-scale check of the spec-driven plugin's sync contract
+(`plugins/spec-driven/skills/spec/references/sync-contract.md`): a spec is the acceptance-test set
+for one small release plus a scope fence, and a PR that builds outside the fence is scope creep even
+when every function in it is pure and every scenario well-formed.
+
+### Step 1 — Find the spec
+
+Read the PR body for a line `Spec: NNN` or a link to `docs/specs/NNN-*.md`.
+
+| Situation | Verdict |
+|---|---|
+| `docs/specs/` does not exist in the repository | **NOT APPLICABLE** — say so and stop |
+| `docs/specs/` exists, the PR names no spec | **UNSPECIFIED** — a finding; the PR builds under no fence |
+| The named spec does not exist | **UNSPECIFIED** |
+| The named spec is `draft` or `withdrawn`/`superseded` | **UNAUTHORISED** — production code may not be written from an unconfirmed or dead spec |
+| The named spec is `confirmed` or `building` | proceed |
+| The named spec is `shipped` or `reconciled` and the diff changes behaviour | **UNAUTHORISED** unless the PR's own Reconciliation/Amendments row explains it |
+
+A docs-only PR (the spec itself, ADRs, a review record) needs no spec; say so.
+
+### Step 2 — Scenarios in the diff versus scenarios in the spec
+
+List every `Scenario:` / `Scenario Outline:` added or changed in the diff's feature files. For each:
+
+- Present, title and steps identical (whitespace aside), in the spec's Gherkin block → **AUTHORISED**.
+- Present in the spec only through an *Amendments* row that this same PR adds → **AUTHORISED (amended)**;
+  the row must name a reason and a confirmer.
+- Absent from the spec → **UNAUTHORISED**. This is the scope-creep rule: the permitted moves were amend
+  (before the RED test) or defer; a scenario "added while I was there" is neither.
+
+Then run the mirror in the other direction on the PR head: every scenario the spec authorises for the
+feature files it names must exist in them (the spec's `Status` decides whether that is required yet —
+`building` and later). If the project carries `tests/test_specs_are_in_sync.py`, run it; otherwise
+run the reference guard from the spec-driven plugin. Its output is the evidence.
+
+### Step 3 — Production changes versus the fence
+
+For every changed production function (from Analysis 3's list), name the authorised scenario it
+serves. A function, module, configuration knob, adapter, cache, retry or abstraction that no
+authorised scenario exercises is **OUTSIDE THE FENCE** — and if the spec's *Out* list names it, cite
+the entry. Refactor-only changes (Analysis 1's structural edits with no behaviour change) are
+exempt, as are the guard tests themselves.
+
+### Step 4 — Lifecycle hygiene
+
+- A PR whose diff turns the last authorised scenario green should move the spec to `shipped`; if it
+  does not, note it (not a failure — a reminder).
+- A PR that changes a scenario in a `shipped`/`reconciled` spec without a Reconciliation entry is a
+  silent amendment.
+
+### Reporting
+
+```
+### 5. Spec Sync
+
+**Spec:** 007 — <title> (`building`)
+
+| Scenario in diff | In spec | Verdict |
+|---|---|---|
+| "A drifted cron firing after the close is refused" | §3, verbatim | AUTHORISED |
+| "Partial loss is reported healthy" | Amendments 2026-09-04, confirmed by E.S. | AUTHORISED (amended) |
+| "Retries the fetch three times" | — | UNAUTHORISED — not in §3; §2 Out lists "retry policy" |
+
+**Mirror check on PR head:** `tests/test_specs_are_in_sync.py` — PASS / FAIL (output quoted)
+
+| Production change | Serves scenario | Verdict |
+|---|---|---|
+| `symbols_to_retry` | "A symbol the vendor had no spot for is refetched once" | inside the fence |
+| `RETRY_BACKOFF_SECONDS` + `_backoff()` | none | OUTSIDE THE FENCE — no scenario reads it |
+```
+
+Verdicts that count as actionable findings: UNSPECIFIED, UNAUTHORISED, OUTSIDE THE FENCE, a failing
+mirror check. NOT APPLICABLE is stated, never implied.
+
 ---
 
 ## Output Format
 
-Produce a structured report with four sections. Use this exact structure:
+Produce a structured report with five sections. Use this exact structure:
 
 ```
 ## PR Validation Report
@@ -522,10 +609,33 @@ Produce a structured report with four sections. Use this exact structure:
 
 ---
 
-**Verdict:** FAIL — 1 purity violation, 1 idempotency gap, 3 coverage gaps, 2 unverified claims.
+### 5. Spec Sync
+
+**Spec:** 012 — Order confirmation (`building`)
+
+| Scenario in diff | In spec | Verdict |
+|---|---|---|
+| "Confirming an already-confirmed order is a no-op" | §3, verbatim | AUTHORISED |
+| "Loyalty points are applied on confirmation" | — | UNAUTHORISED — not in §3; no Amendments row |
+
+**Mirror check on PR head:** `tests/test_specs_are_in_sync.py` — PASS
+
+| Production change | Serves scenario | Verdict |
+|---|---|---|
+| `confirm(order)` | "Confirming a pending order" | inside the fence |
+| `applyLoyaltyPoints(order, customer)` | none | OUTSIDE THE FENCE |
+
+**Spec-sync findings requiring action:**
+- "Loyalty points are applied on confirmation" and `applyLoyaltyPoints`: either add an Amendments row
+  (with the customer's confirmation) to spec 012, or move both to a deferred backlog entry and out of
+  this PR.
+
+---
+
+**Verdict:** FAIL — 1 purity violation, 1 idempotency gap, 3 coverage gaps, 2 unverified claims, 1 unauthorised scenario.
 ```
 
-If all four analyses pass with no findings, abbreviate the report to:
+If all five analyses pass with no findings, abbreviate the report to:
 
 ```
 ## PR Validation Report
@@ -533,6 +643,8 @@ All changed functions are pure or appropriately boundary-impure. All state-chang
 operations are idempotent and covered by double-application scenarios. BDD scenario
 coverage is complete, with no quality issues found. Every protection claim in the PR
 body was confirmed by a removal check: each mapped test fails when its guard is removed.
+Every scenario in the diff is authorised by spec NNN, the mirror check passes on the PR
+head, and every production change serves an authorised scenario.
 
 **Verdict:** PASS
 ```
@@ -540,7 +652,8 @@ body was confirmed by a removal check: each mapped test fails when its guard is 
 State the removal-check outcome explicitly even when the PR body makes no claims ("the PR body asserts
 no protections; Analysis 4 is not applicable") and when the checks could not be run ("Analysis 4:
 UNVERIFIABLE — `cargo test` requires a database that is not available in this environment"). Silence
-on Analysis 4 reads as a pass it did not earn.
+on Analysis 4 reads as a pass it did not earn. The same holds for Analysis 5: "Analysis 5: NOT
+APPLICABLE — the repository keeps no `docs/specs/`" is a sentence the report must contain.
 
 ---
 
@@ -556,6 +669,15 @@ This skill is the validation layer for the xp-clean-code skill. The relationship
 | Refactor as a separate phase | Verify that the diff does not mix behaviour changes with structural changes |
 | One step at a time | Flag PRs that touch more than one scenario in a single commit |
 | A test that never fails proves nothing | Remove each protection and prove its test fails — for every claim the PR body makes |
+
+And with the **spec-driven** plugin, whose `spec` skill fences each small release:
+
+| spec-driven | pr-validation |
+|---|---|
+| A spec authorises scenarios; the PR body names the spec | Analysis 5: every scenario in the diff is authorised, directly or by an amendment in the same PR |
+| The spec's Gherkin mirrors the feature file | Run the mirror guard on the PR head |
+| Scope creep stops the work: amend or defer | Every production change serves an authorised scenario; anything else is outside the fence |
+| The review skill measures drift over the whole tree | This skill measures it over one diff |
 
 ---
 
@@ -574,6 +696,10 @@ Before reporting PASS:
   □ Every claim mapped to a protection site and a test
   □ Every mapped test proven to FAIL with its protection removed
   □ Every mutation restored, and the baseline confirmed green again
+  □ Spec named in the PR body (or Analysis 5 stated NOT APPLICABLE / docs-only)
+  □ Every scenario in the diff authorised by the spec, or by an Amendments row in this PR
+  □ Mirror guard run on the PR head
+  □ Every production change traced to an authorised scenario
 
 Purity:         Same input → same output; no hidden I/O; no argument mutation
 Signatures:     Option only for one-cause absence; typed error when the caller must branch;
@@ -585,9 +711,11 @@ Gap patterns:   Happy-path-only, missing boundary, vague Then, hidden fixture,
                 bundled When, missing contract, missing rollback
 Claims:         Every "prevents / blocks / guards against" in the PR body needs a test
                 that fails when the guard is removed. No removal check → no claim.
+Spec sync:      `Spec: NNN` in the body; scenarios in the diff ⊆ the spec's scenarios (or
+                amended in this PR); mirror guard green; no production change outside the fence.
 
-Report:         Four sections — Purity | Idempotency | Coverage | Claims
-Verdict:        PASS only when all four sections have zero actionable findings
+Report:         Five sections — Purity | Idempotency | Coverage | Claims | Spec Sync
+Verdict:        PASS only when all five sections have zero actionable findings
 ```
 
 For language-specific impurity detection patterns, see `references/purity-checklist.md`.
