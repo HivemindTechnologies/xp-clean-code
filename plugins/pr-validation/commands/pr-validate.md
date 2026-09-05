@@ -30,8 +30,8 @@ user (suggest `gh auth login`).
 ## Step 2 — Run the validation
 
 Load and apply the **pr-validation** skill, using the diff from Step 1 as the PR diff.
-Follow the skill exactly: run the four analyses (Purity, Idempotency, BDD Coverage, Protection Claims)
-and produce the structured PR Validation Report with a final verdict.
+Follow the skill exactly: run the five analyses (Purity, Idempotency, BDD Coverage, Protection Claims,
+Spec Sync) and produce the structured PR Validation Report with a final verdict.
 
 Work only from the diff obtained above — analyse changed functions, not unchanged code,
 unless a changed function's call site requires it.
@@ -51,3 +51,11 @@ Ask before running the project's test command if it is unknown or expensive; use
 runner (`pytest`, `cargo test`, `sbt test`, `npm test`, …). If tests cannot be run here — no toolchain,
 missing services, required secrets — report the affected claims as **UNVERIFIABLE** with the reason.
 Never report a claim as VERIFIED from a static reading of the test.
+
+## Step 4 — Run the spec-sync check for Analysis 5
+
+If the repository has a `docs/specs/` directory: read the spec the PR body names (`Spec: NNN`), list the
+scenarios the diff adds or changes, and run the mirror guard on the PR head — the project's
+`tests/test_specs_are_in_sync.py` if present, otherwise the reference guard from the spec-driven plugin
+(`plugins/spec-driven/skills/spec/references/spec-sync-guard.py`) copied beside the worktree. Quote its
+output. If the directory does not exist, the report states "Analysis 5: NOT APPLICABLE".
