@@ -30,61 +30,93 @@ The rules here are non-negotiable defaults.
 
 ---
 
-## Choose the mode
+## Procedure
 
-| Mode | When | Starts from |
-|---|---|---|
-| **sync** | `docs/specs/` exists and at least one spec is `building` or later | the existing documents |
-| **retrofit** | no specs, or feature files that no spec owns are the majority | tests, code, git log, README — see `references/retrofit.md`, then return here for step 3 onward |
-
-State the mode at the top of the record.
-
----
-
-## Procedure (sync mode)
+The mode is **decided after** steps 1 and 2, because the inventory and the guard's output are
+what decide it. Do not guess it from the directory listing.
 
 ### Step 1 — Inventory
 
-List what exists, with counts: operative doc (lines, per section), `DESIGN.md` (sections,
-status), `ROADMAP.md` (milestones, iterations by status), ADRs (by status), specs (by status),
+List what exists, with counts: operative doc (lines and characters, per section), `DESIGN.md`
+(sections; its document-level status line and any built/future labels — "none" if it has
+neither), `ROADMAP.md` (milestones, iterations by status), ADRs (by status), specs (by status),
 feature files (owned / unowned), test modules (bound / unbound), the guards present
 (`test_docs_are_current`, `test_specs_are_in_sync`). This table is the *Measured state* section
 of the record. Measure; do not estimate.
 
 ### Step 2 — Run the mechanical checks
 
-- `python spec-sync-guard.py` (or the project's copy) → mirror drift and unowned feature files.
+- `python spec-sync-guard.py <project-root>` (or the project's own `tests/test_specs_are_in_sync.py`) → counts of specs and owned/unowned feature files, mirror drift, malformed spec headers; exit 1 on drift.
 - The project's docs-current guard, if present → stale claims.
-- The type checker and the full suite → the baseline you are reviewing must be green; if it is
-  not, that is finding F1 and the review continues.
+- The type checker and the full suite → the baseline you are reviewing should be green.
+  Distinguish two kinds of non-green: a **failing** test or type error is finding F1 🔴 and the
+  review continues; a test or check **blocked by the environment** (a private dependency not
+  installed, a secret absent, a service unreachable) is not a red baseline — it is a
+  reproducibility finding 🟡 ("N tests cannot run without X"), and the review says which tests it
+  therefore could not observe.
+
+### Step 2b — Decide the mode
+
+| Mode | Criterion (by path — a file *named* SPEC outside `docs/specs/` does not count) | Then |
+|---|---|---|
+| **sync** | `docs/specs/` exists and the guard reports owned feature files ≥ unowned | continue with Step 3 |
+| **retrofit** | `docs/specs/` is absent, or unowned feature files outnumber owned | a **retrofit review**: continue with Step 3 over what exists, and add to the record a *sequenced retrofit plan* built from `references/retrofit.md` — one row per document to derive, each sized as one iteration. The review itself writes **no** feature file, spec, ADR or brief; those are its follow-ups, landed one per commit once the customer has sequenced them. |
+
+State the mode and the criterion's numbers at the top of the record.
 
 ### Step 3 — Walk the drift patterns
 
-Take `references/drift-patterns.md` section by section — A operative doc, B spec ⇄ feature ⇄
-test, C decisions, D design ⇄ roadmap ⇄ code, E open questions and risks — and for each pattern
-record either a finding with its evidence or "none found". Silence on a pattern reads as a pass
-it did not earn; write the "none found".
+Take `references/drift-patterns.md` sections A–D — A operative doc, B spec ⇄ feature ⇄ test,
+C decisions, D design ⇄ roadmap ⇄ code — and for each pattern record one of three verdicts:
+a **finding** with its evidence; **none found** (looked, nothing there); or **not applicable**
+(the pattern has no subject — e.g. *mirror drift* with zero specs). "Not applicable" is not a
+pass and is never written where the subject exists. Silence on a pattern reads as a pass it did
+not earn; write the verdict.
+
+Where a document plays a role without having the shape — a decisions file that is not Nygard
+ADRs, a spec outside `docs/specs/` — count its entries in the role they play (confirmed decisions
+count as accepted ADRs) and file the shape as its own finding.
 
 Two patterns deserve deliberate effort because they hide:
 
-- **Built ahead of need.** For every type and module in the domain layer, name the scenario
-  that consumes it. None → finding.
+- **Built ahead of need.** For every type and module in the domain layer, name a **production
+  call site** that consumes it. "Consumes" means production code, not a scenario: a module with
+  production consumers and no scenario is *behaviour without a scenario* (pattern B), a
+  different finding. None → built ahead of need.
 - **The inert check.** For every guard, threshold and veto, ask whether it has ever produced a
-  non-default outcome on the recorded data. Count it (0 of N). A check that cannot fire is
-  worse than no check, because it is trusted.
+  non-default outcome on the recorded data. Count it (0 of N). When the record is not reachable
+  from the review (a live database elsewhere), count from the figures the documents themselves
+  record, or establish inertness **by construction** (the input the check reads is absent by
+  design for these cases) — and say which you did. A check that cannot fire is worse than no
+  check, because it is trusted.
 
-### Step 4 — Collect open questions and risks
+### Step 4 — Open questions and risks (drift-patterns section E)
 
-From the brief's untested hypotheses, the ADRs' fired `Revisit when` triggers, markers older
-than one milestone, and single points of failure no ADR names. Each with who could answer it.
+Section E is not drift and is collected here rather than in Step 3: the brief's untested
+hypotheses, the ADRs' fired `Revisit when` triggers, markers older than one milestone, single
+points of failure no ADR names. Each row names who could answer it and *by when* — a calendar
+fact where one exists (a sample floor's expected date, a settlement, a phase gate), otherwise
+"standing".
 
 ### Step 5 — Sequence the follow-ups
 
-Every finding becomes a follow-up row: one iteration's worth, typed as **docs-only** (move
-history, write an ADR born `accepted`, fill a Reconciliation), **test-only** (bind a scenario,
-add a guard), or **spec needed** (behaviour without a scenario — goes to the roadmap backlog and
-is built under TDD later). Order by the damage the drift can do to the next session's work:
-mis-scoping claims in the operative doc first, then unguarded decisions, then everything else.
+Every finding becomes a follow-up row: one iteration's worth, typed as one of:
+
+| Type | Meaning | Lands as |
+|---|---|---|
+| **docs-only** | move history, write an ADR born `accepted`, fill a Reconciliation | its own commit, no spec |
+| **test-only** | bind a scenario, add a guard, tag a scenario | its own commit, no spec |
+| **refactor** | a behaviour-preserving code change (a duplicated constant, a seam extraction) | its own commit under xp-clean-code's refactor rules — green before and after, never with a feature |
+| **environment** | toolchain or reproducibility (a stub for a private dependency, a CI floor) | its own commit |
+| **spec needed** | behaviour without a scenario, or a change in behaviour | the roadmap backlog; built later under a spec, under TDD |
+
+Severity: 🔴 mis-scopes the next session's work or contradicts the code (a wrong claim in the
+operative doc, an ADR the code violates, an unauthorised behaviour); 🟡 will become 🔴 if left
+(history accreting, an unguarded decision, a stuck spec); 🟢 costs a reader time and nothing
+else. Order the follow-ups 🔴 first, then by how many later follow-ups each unblocks.
+
+A follow-up that is not one iteration's worth is split: "bind 38 test modules" is 38 rows, or
+one row per module with the hard-rule modules first.
 
 ### Step 6 — Write the record
 
@@ -93,24 +125,28 @@ mis-scoping claims in the operative doc first, then unguarded decisions, then ev
 ```markdown
 # Review · <slug> — YYYY-MM-DD, against <commit>
 
-**Mode:** sync | retrofit   **No code changed by this document.**
+**Mode:** sync | retrofit (criterion: N owned / M unowned feature files)
+**Plugin:** spec-driven <version read from plugin.json>   **No code changed by this document.**
 
 ## Measured state
-<the inventory table>
+<the inventory table; baseline: passed / failed / environment-blocked, with the blocker>
 
 ## Findings
 ### F1 — <title>  🔴 | 🟡 | 🟢
 **Pattern:** <from drift-patterns.md>  **Evidence:** <symbols, sections, counts>
 **Follow-up:** <one iteration; docs-only / test-only / spec needed>
 
-## Patterns checked with nothing found
-<list — so a reader knows they were looked at>
+## Patterns checked with nothing found, and patterns not applicable
+<two lists — so a reader knows they were looked at, and that N/A was not counted as a pass>
 
 ## Open questions and risks
 | # | Question / risk | Who can answer | By when |
 
 ## Sequenced follow-ups
-| # | Finding | Type | Iteration size | Order |
+| # | Finding | Type (docs-only / test-only / refactor / environment / spec needed) | Order |
+
+## Retrofit plan (retrofit mode only)
+<one row per document to derive, from references/retrofit.md, each one iteration, in that file's order>
 
 ## Exit gate for this review's follow-ups
 <evidence that they are done: the guard passes, the operative doc is under budget, …>
@@ -131,7 +167,10 @@ spec.
   edits a review's follow-ups may make without a spec.
 - **Measure, cite symbols, count.** "Coverage seems thin" is not a finding; "14 of 60 test
   modules bind no scenario" is.
-- **Every pattern gets a verdict**, including "none found".
+- **Every pattern gets a verdict**: finding, none found, or not applicable — and not applicable
+  is never a pass.
+- **A retrofit review writes only the record.** The documents it calls for are follow-ups the
+  customer sequences; the review does not produce them.
 - **A retrofitted document describes what is built.** It never invents intent; inferred
   intent is marked *inferred*.
 - **The operative doc is held to its budget and to zero history.** This is the single most
@@ -156,11 +195,14 @@ spec.
 ## Quick reference
 
 ```
-□ Mode stated (sync / retrofit)          □ Baseline green, or F1 says it is not
 □ Inventory measured, not estimated      □ Guards run: mirror, docs-current, unowned features
-□ Every drift pattern: finding or "none found"
-□ Built-ahead-of-need: every domain type names its consuming scenario
-□ Inert checks counted (0 of N)          □ Open questions have an owner
-□ Every finding → one-iteration follow-up, typed docs-only / test-only / spec needed
+□ Baseline: green, red (F1), or environment-blocked (🟡, named) — never conflated
+□ Mode decided from the guard's numbers, stated with them
+□ Every drift pattern A–D: finding / none found / not applicable (N/A is not a pass)
+□ Built-ahead-of-need: every domain type names a production call site
+□ Inert checks counted (0 of N), or shown inert by construction, and said which
+□ Open questions: owner, and "by when" from a calendar fact or "standing"
+□ Every finding → one-iteration follow-up, typed docs-only / test-only / refactor / environment / spec needed
+□ Retrofit mode: the plan is rows in the record, not documents written
 □ Record written under docs/reviews/; no code changed
 ```

@@ -1,15 +1,21 @@
 # Retrofit · Bringing an existing codebase under the spec-driven shape
 
-Retrofit is the review skill's second entry mode. The procedure is the same measurement; the
-difference is that most of the documents do not exist yet and must be **derived from what is
-there** — tests, code, commit history, README — rather than written from intent. The cardinal
-rule: **a retrofitted document describes what is built. It never invents intent the code does
-not show.**
+Retrofit is the review skill's second entry mode. It has two parts, and they are not done in
+one sitting:
+
+1. **The retrofit review** — the ordinary review procedure over what exists, whose record
+   carries a *sequenced retrofit plan*: one row per step below, each sized as one iteration.
+   The review writes nothing but the record.
+2. **The retrofit itself** — the steps below, landed one per commit in the order the customer
+   sequenced, each reviewable on its own. Most of the documents do not exist yet and must be
+   **derived from what is there** — tests, code, commit history, README — never written from
+   intent. The cardinal rule: **a retrofitted document describes what is built. It never
+   invents intent the code does not show.**
 
 ## Order of work
 
-Do the steps in this order; each later step reads the earlier ones. Land each as its own
-commit or PR so the customer can review a small thing at a time.
+Each later step reads the earlier ones. One step is rarely one iteration; the plan splits it
+(step 1 is one row **per test module**, hard-rule and risk-invariant modules first).
 
 ### 1. Scenarios from tests
 
@@ -22,6 +28,8 @@ For each test module without a feature file:
 - Write the feature file. Bind the existing tests to it where the stack allows (pytest-bdd:
   `scenarios()` plus step functions that call the existing helpers); where it does not, leave
   the binding as a follow-up row and record the scenario anyway — the record is the point.
+  **One module per iteration**, hard-rule and risk-invariant modules first: binding hundreds of
+  tests in one commit is exactly the large step XP forbids.
 - Behaviour the tests do not cover is **not** given a scenario. It is a finding under
   *behaviour without a scenario*, and writing the scenario is a future spec's job, under TDD.
 
@@ -41,9 +49,10 @@ from the file. A failure here is a defect in the retrofit, not in the code.
 
 Search for decisions living in code: named constants with rationale comments, sign conventions,
 day-count functions, tolerances, thresholds, accepted schema versions, boundary contracts. Each
-becomes an ADR born `accepted`, with `Confirmed by` = the commit that introduced it and its date,
-`Context` from the comment or the issue it cites, and `Consequences` naming the test that guards
-it — or a finding that none does.
+becomes an ADR born `accepted`, with `Confirmed by` = the commit that introduced it and its date —
+or, where history is truncated or the decision predates the repository, the document and date
+that first recorded it, marked *no commit* — `Context` from the comment or the issue it cites,
+and `Consequences` naming the test that guards it — or a finding that none does.
 
 Decisions found only in prose (a doc says "we decided X") with no code location get an ADR in
 `proposed` state and a finding: the code does not show the decision was made.
@@ -72,10 +81,12 @@ dated sentence to the ADR, spec or review it belongs to, leaving a link; keep in
 current status only; add the precedence rule and the docs-current guard for each checkable
 claim.
 
-### 7. The review record
+### 7. The closing review
 
-Now run the ordinary review procedure over the retrofitted set and write
-`docs/reviews/YYYY-MM-DD-retrofit.md`. Its follow-ups are the first real backlog.
+When the plan's rows have landed, run the review skill again in what should now be **sync**
+mode. Its record closes the retrofit, and its follow-ups are the first real backlog. (The
+*opening* record — the retrofit review that produced the plan — is already under
+`docs/reviews/`.)
 
 ## What retrofit refuses
 
