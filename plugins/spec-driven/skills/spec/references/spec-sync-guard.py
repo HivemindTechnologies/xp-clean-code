@@ -41,6 +41,9 @@ _ROOT_OVERRIDE = sys.argv[1] if __name__ == "__main__" and len(sys.argv) > 1 els
 ROOT = Path(_ROOT_OVERRIDE).resolve() if _ROOT_OVERRIDE else Path(__file__).resolve().parents[1]
 SPECS_DIR = ROOT / "docs" / "specs"
 
+# The lifecycle from sync-contract.md §2. A status outside this set is a malformed header, not a
+# spec in some other state: a typo such as `buidling` must fail the check, never opt out of it.
+LIFECYCLE_STATES = {"draft", "confirmed", "building", "shipped", "reconciled", "withdrawn", "superseded"}
 CHECKED_STATES = {"building", "shipped", "reconciled"}
 _STATUS = re.compile(r"^\*\*Status:\*\*\s*`?([a-z]+)`?", re.MULTILINE)
 _FEATURE_FILES = re.compile(r"^\*\*Feature files?:\*\*(.*)$", re.MULTILINE)
@@ -134,6 +137,12 @@ def read_spec(path: Path) -> Spec | str:
     status = _STATUS.search(text)
     if status is None:
         return f"{path.name}: no parseable `**Status:** <state>` line (see spec-template.md)"
+    if status.group(1) not in LIFECYCLE_STATES:
+        return (
+            f"{path.name}: `**Status:** {status.group(1)}` is not a lifecycle state "
+            f"({', '.join(sorted(LIFECYCLE_STATES))}); a spec in an unknown state is not checked, "
+            "so it is refused rather than skipped"
+        )
     files_line = _FEATURE_FILES.search(text)
     declared = _BACKTICKED.findall(files_line.group(1)) if files_line else []
     refused = [p for p in (feature_path_problem(d) for d in declared) if p is not None]
@@ -186,9 +195,19 @@ def mirror_problems(spec: Spec) -> list[str]:
             problems.append(f"{feature.relative_to(ROOT)} could not be read as a feature file: {unreadable}")
             continue
         try:
-            in_files.update(scenarios_in(text))
+            found = scenarios_in(text)
         except AssertionError as duplicate:
             problems.append(f"{feature.relative_to(ROOT)}: {duplicate}")
+            continue
+        # A title already seen in an earlier owned file must not be overwritten: the later copy
+        # could match the spec while the earlier one carries steps the spec never authorised.
+        for title in sorted(found.keys() & in_files.keys()):
+            problems.append(
+                f"{title!r} is defined in more than one feature file {spec.path.name} owns "
+                f"(again in {feature.relative_to(ROOT)}); one scenario, one definition"
+            )
+            del found[title]
+        in_files.update(found)
     for title, authorised in spec.scenarios.items():
         built = in_files.get(title)
         if built is None:
