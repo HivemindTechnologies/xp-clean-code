@@ -17,6 +17,11 @@ Spec header contract (the first 40 lines of each `docs/specs/*.md`):
 
 Only specs in `building`, `shipped` or `reconciled` are checked: in `draft` and `confirmed` the
 spec alone is authoritative and no feature file need exist yet.
+
+The header is untrusted input — a spec arrives in a pull request like any other file — so a
+feature-file path is accepted only when it is relative, resolves to a location inside the project
+root, and ends in `.feature`. Anything else is reported as a malformed header and never opened:
+the guard's job is to compare two files it owns, not to read what a spec tells it to.
 """
 
 from __future__ import annotations
@@ -100,18 +105,41 @@ class Spec:
     scenarios: dict[str, Scenario]
 
 
+def feature_path_problem(declared: str) -> str | None:
+    """Why a declared feature-file path may not be opened, or None when it may.
+
+    The path comes from a document anyone who can open a pull request can write. It must stay
+    inside the project root after resolution (so `../` and symlinks out of the tree are refused),
+    must not be absolute, and must be a `.feature` file — the only kind of file the mirror has any
+    business reading.
+    """
+    if Path(declared).is_absolute():
+        return f"`{declared}` is absolute; feature-file paths are relative to the project root"
+    resolved = (ROOT / declared).resolve()
+    if not resolved.is_relative_to(ROOT.resolve()):
+        return f"`{declared}` resolves outside the project root"
+    if resolved.suffix != ".feature":
+        return f"`{declared}` is not a `.feature` file"
+    return None
+
+
 def read_spec(path: Path) -> Spec | str:
     """The spec, or a one-line problem when its header does not follow the template.
 
     A malformed header is reported beside the other drift rather than raised: one badly-headed
-    file must not stop the other specs from being checked.
+    file must not stop the other specs from being checked. A spec naming a path the guard may
+    not open is malformed as a whole — none of its paths are read.
     """
     text = path.read_text(encoding="utf-8")
     status = _STATUS.search(text)
     if status is None:
         return f"{path.name}: no parseable `**Status:** <state>` line (see spec-template.md)"
     files_line = _FEATURE_FILES.search(text)
-    files = tuple(ROOT / f for f in _BACKTICKED.findall(files_line.group(1))) if files_line else ()
+    declared = _BACKTICKED.findall(files_line.group(1)) if files_line else []
+    refused = [p for p in (feature_path_problem(d) for d in declared) if p is not None]
+    if refused:
+        return f"{path.name}: feature-file path refused — " + "; ".join(refused)
+    files = tuple(ROOT / d for d in declared)
     gherkin = "\n".join(block for block in _GHERKIN_BLOCK.findall(text))
     return Spec(path, status.group(1), files, scenarios_in(gherkin))
 
@@ -149,10 +177,18 @@ def mirror_problems(spec: Spec) -> list[str]:
         return [f"{spec.path.name} is `{spec.status}` but names no feature file"]
     in_files: dict[str, Scenario] = {}
     for feature in spec.feature_files:
-        if not feature.exists():
-            problems.append(f"{spec.path.name} names {feature.relative_to(ROOT)}, which does not exist")
+        if not feature.is_file():
+            problems.append(f"{spec.path.name} names {feature.relative_to(ROOT)}, which is not a file")
             continue
-        in_files.update(scenarios_in(feature.read_text(encoding="utf-8")))
+        try:
+            text = feature.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as unreadable:
+            problems.append(f"{feature.relative_to(ROOT)} could not be read as a feature file: {unreadable}")
+            continue
+        try:
+            in_files.update(scenarios_in(text))
+        except AssertionError as duplicate:
+            problems.append(f"{feature.relative_to(ROOT)}: {duplicate}")
     for title, authorised in spec.scenarios.items():
         built = in_files.get(title)
         if built is None:

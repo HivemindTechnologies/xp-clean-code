@@ -79,7 +79,7 @@ Direction of the fix when the check fails: copy in the direction the state dicta
 `draft`/`confirmed` the spec is right; from `building` onward the feature file is right, and the
 spec's block is refreshed to match — then the *Amendments* log says why the behaviour moved.
 
-The reference implementation is `references/spec-sync-guard.py` (Python, stdlib only). For other
+The reference implementation is `references/spec-sync-guard.py` (Python, stdlib only). It treats the spec header as untrusted input: a feature-file path must be relative, resolve inside the project root and end in `.feature`, or the spec is reported malformed and nothing is opened. For other
 stacks, reproduce the algorithm in §7 — it is a text comparison, so it needs no Gherkin parser.
 
 ---
