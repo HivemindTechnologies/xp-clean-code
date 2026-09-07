@@ -1,0 +1,28 @@
+{
+  "name": "pr-validation",
+  "version": "1.2.0",
+  "description": "Pull request validation for purity, idempotency, BDD scenario coverage, and protection claims backed by tests",
+  "author": {
+    "name": "Hivemind Technologies",
+    "email": "info@hivemindtechnologies.com",
+    "url": "https://hivemindtechnologies.com"
+  },
+  "homepage": "https://github.com/HivemindTechnologies/xp-clean-code#the-pr-validation-plugin",
+  "repository": "https://github.com/HivemindTechnologies/xp-clean-code",
+  "license": "MIT",
+  "keywords": ["pull-request", "code-review", "bdd", "purity", "idempotency", "mutation-testing"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "PR Validation",
+    "shortDescription": "Validate PR behavior, coverage, and protection claims",
+    "longDescription": "Audit pull requests for functional purity, idempotent state transitions, BDD scenario coverage, and protection claims backed by tests that fail when the protection is removed.",
+    "developerName": "Hivemind Technologies",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "websiteURL": "https://hivemindtechnologies.com",
+    "defaultPrompt": [
+      "Validate this pull request with the PR validation workflow.",
+      "Check this diff for purity, idempotency, BDD gaps, and unsupported protection claims."
+    ]
+  }
+}

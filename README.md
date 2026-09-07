@@ -1,6 +1,6 @@
 # xp-clean-code
 
-Plugins that bring Extreme Programming and Clean Code discipline to AI-assisted development: one for how code gets built, one for validating that a pull request lives up to it. Works with **Cursor** (Team Marketplace) and **Claude Code**.
+Plugins that bring Extreme Programming and Clean Code discipline to AI-assisted development: one for how code gets built, one for validating that a pull request lives up to it. Works with **Claude Code**, **Cursor** (Team Marketplace), and **Codex**.
 
 -----
 
@@ -12,7 +12,7 @@ At [Hivemind Technologies](https://hivemindtechnologies.com), we build scalabe d
 
 ## What this skill does
 
-AI coding agents are remarkably capable, but left unconstrained they tend toward the same failure modes as a talented developer working without discipline: skipping tests, over-engineering, and conflating building with cleaning. This skill gives Claude Code a concrete methodology to follow — one that engineers have used to ship reliable software for decades.
+AI coding agents are remarkably capable, but left unconstrained they tend toward the same failure modes as a talented developer working without discipline: skipping tests, over-engineering, and conflating building with cleaning. This skill gives the agent a concrete methodology to follow — one that engineers have used to ship reliable software for decades.
 
 It encodes eight principles:
 
@@ -51,6 +51,25 @@ ln -s "$(pwd)/plugins/pr-validation/skills/pr-validation" ~/.cursor/skills/pr-va
 
 Or load a plugin from `~/.cursor/plugins/local/` (symlink a plugin directory that contains `.cursor-plugin/plugin.json`).
 
+### Codex
+
+Add this repository as a Codex plugin marketplace, then install either or both plugins:
+
+```bash
+codex plugin marketplace add HivemindTechnologies/xp-clean-code --ref main
+codex plugin add xp-clean-code@xp-clean-code
+codex plugin add pr-validation@xp-clean-code
+```
+
+Start a new Codex conversation after installation. Codex may select a skill automatically, or you can invoke one explicitly:
+
+```text
+$xp-clean-code implement this feature
+$pr-validation validate PR 123
+```
+
+Run `/skills` in Codex CLI or the IDE extension to browse installed skills.
+
 ### Claude Code
 
 **As a plugin (recommended — applies across all projects):**
@@ -84,16 +103,22 @@ curl https://raw.githubusercontent.com/HivemindTechnologies/xp-clean-code/main/p
 ## What’s included
 
 ```
+.agents/plugins/
+└── marketplace.json                      # Codex marketplace index
 .cursor-plugin/
 └── marketplace.json                      # Cursor Team Marketplace index
 .claude-plugin/
 └── marketplace.json                      # Claude Code marketplace index
+scripts/
+└── validate_manifests.py                 # Cross-host name/version consistency check
 
 plugins/xp-clean-code/                    # how to build
 ├── .cursor-plugin/
 │   └── plugin.json                       # Cursor plugin manifest
 ├── .claude-plugin/
 │   └── plugin.json                       # Claude Code plugin manifest
+├── .codex-plugin/
+│   └── plugin.json                       # Codex plugin manifest
 └── skills/
     └── xp-clean-code/
         ├── SKILL.md                      # Core principles — loaded on demand
@@ -109,12 +134,15 @@ plugins/pr-validation/                    # verifying what was built
 │   └── plugin.json
 ├── .claude-plugin/
 │   └── plugin.json
+├── .codex-plugin/
+│   └── plugin.json
 ├── commands/
-│   └── pr-validate.md                    # /pr-validate — runs the check against a GitHub PR
+│   └── pr-validate.md                    # Claude /pr-validate adapter
 └── skills/
     └── pr-validation/
         ├── SKILL.md                      # The four analyses — loaded on demand
         └── references/
+            ├── github-pr-workflow.md     # Shared GitHub acquisition + isolated removal checks
             ├── purity-checklist.md       # Impurity signals + absence-vs-failure signals:
             │                             #   Python, Scala, Java, TypeScript, Rust
             ├── gap-patterns.md           # Eleven coverage gap patterns, with before/after scenarios
@@ -123,9 +151,15 @@ plugins/pr-validation/                    # verifying what was built
 
 The reference files are loaded on demand. `SKILL.md` stays lean in context; the detail is there when the agent needs it.
 
+Validate the marketplace and keep the Claude Code, Cursor, and Codex manifest names and versions aligned with:
+
+```bash
+python3 scripts/validate_manifests.py
+```
+
 ### The pr-validation plugin
 
-Where `xp-clean-code` governs how to build, `pr-validation` checks that what was built holds up. Run `/pr-validate` on a PR — or ask Claude to review one — and it produces a structured report across four analyses:
+Where `xp-clean-code` governs how to build, `pr-validation` checks that what was built holds up. Run `/pr-validate` in Claude Code, invoke `$pr-validation` in Codex, or ask the agent to review a PR, and it produces a structured report across four analyses:
 
 1. **Purity** — every changed function classified as Pure, Impure–boundary, or Impure–violation.
 1. **Idempotency** — every state transition checked for `f(f(x)) = f(x)`, and for a double-application scenario.

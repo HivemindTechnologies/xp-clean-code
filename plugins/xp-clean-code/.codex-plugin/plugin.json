@@ -1,0 +1,28 @@
+{
+  "name": "xp-clean-code",
+  "version": "1.2.0",
+  "description": "Extreme Programming and Clean Code discipline for software development",
+  "author": {
+    "name": "Hivemind Technologies",
+    "email": "info@hivemindtechnologies.com",
+    "url": "https://hivemindtechnologies.com"
+  },
+  "homepage": "https://github.com/HivemindTechnologies/xp-clean-code#readme",
+  "repository": "https://github.com/HivemindTechnologies/xp-clean-code",
+  "license": "MIT",
+  "keywords": ["xp", "tdd", "bdd", "clean-code", "ddd", "functional-programming"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "XP Clean Code",
+    "shortDescription": "XP, TDD, DDD, and functional design practices",
+    "longDescription": "Apply test-first development, BDD scenarios, clean code, domain-driven design, functional-core design, and explicit outcome types while building software.",
+    "developerName": "Hivemind Technologies",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "websiteURL": "https://hivemindtechnologies.com",
+    "defaultPrompt": [
+      "Apply XP and clean-code discipline to this implementation.",
+      "Turn this feature request into BDD scenarios and tests."
+    ]
+  }
+}

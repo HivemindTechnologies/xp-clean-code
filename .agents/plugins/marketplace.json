@@ -1,0 +1,32 @@
+{
+  "name": "xp-clean-code",
+  "interface": {
+    "displayName": "XP Clean Code"
+  },
+  "plugins": [
+    {
+      "name": "xp-clean-code",
+      "source": {
+        "source": "local",
+        "path": "./plugins/xp-clean-code"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "pr-validation",
+      "source": {
+        "source": "local",
+        "path": "./plugins/pr-validation"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

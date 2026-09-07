@@ -1,20 +1,10 @@
 ---
 name: xp-clean-code
 description: >-
-  Apply Extreme Programming (XP), Clean Code, Domain-Driven Design (DDD),
-  and pure functional programming discipline to software development. Use
-  this skill whenever writing, reviewing, or extending production code —
-  especially when the task involves implementing new behaviour, refactoring,
-  adding tests, or defining acceptance criteria. Triggers on phrases like
-  "implement feature", "add tests", "refactor", "write a spec", "acceptance
-  criteria", "Given/When/Then", "TDD", "BDD", "domain model", "value
-  object", "aggregate", "pure function", "side effect", "referential
-  transparency", "idempotent", "monad", "Either", "Option", "Result",
-  "newtype", "null", "nullable", "ADT", "sum type", "exhaustive",
-  "assert_never", "type annotation", "mypy", "pyright", "clippy", or any
-  request to build something non-trivial. Composes cleanly with
-  Karpathy-style behavioural guidelines: where those address how an agent
-  should reason, this skill addresses how code should be built.
+  Apply XP, TDD/BDD, Clean Code, Domain-Driven Design, functional-core design,
+  and explicit outcome types while implementing, testing, refactoring, or
+  reviewing production code. Use for non-trivial coding work; do not use for
+  repository navigation or explanation-only requests.
 ---
 
 # XP · Clean Code · DDD · Functional Design

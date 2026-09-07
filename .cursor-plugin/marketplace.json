@@ -6,7 +6,7 @@
     "email": "info@hivemindtechnologies.com"
   },
   "metadata": {
-    "description": "XP and clean code practices for Cursor and Claude Code",
+    "description": "XP and clean code practices for Claude Code, Cursor, and Codex",
     "version": "1.2.0",
     "pluginRoot": "plugins"
   },

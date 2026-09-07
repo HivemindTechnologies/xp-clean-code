@@ -5,14 +5,14 @@
     "email": "info@hivemindtechnologies.com"
   },
   "metadata": {
-    "description": "XP and clean code practices for Cursor and Claude Code",
+    "description": "XP and clean code practices for Claude Code, Cursor, and Codex",
     "version": "1.2.0"
   },
   "plugins": [
     {
       "name": "xp-clean-code",
       "source": "./plugins/xp-clean-code",
-      "description": "XP oriented and clean code guidelines for gen AI assisted coding with claude code"
+      "description": "XP-oriented and clean code guidelines for AI-assisted coding"
     },
     {
       "name": "pr-validation",
