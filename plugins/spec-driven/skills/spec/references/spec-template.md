@@ -90,6 +90,6 @@ shipped, with the reason. "None" is a legitimate entry and a rare one.
 | Field | Rule |
 |---|---|
 | `Status` | one of `draft` `confirmed` `building` `shipped` `reconciled` `withdrawn` `superseded` — lower case, nothing else on the line |
-| `Feature files` | back-ticked paths relative to the repo root, comma-separated; may be empty in `draft` |
+| `Feature files` | back-ticked paths relative to the repo root, comma-separated, each ending in `.feature` and resolving inside the repo; may be empty in `draft`. The guard refuses absolute paths, `../` escapes and non-`.feature` files without opening them — the header is untrusted input like any other file in a PR |
 | `Roadmap iterations` | the iteration numbers this spec consumes; the roadmap links back |
 | `Decisions relied on` | ADRs whose acceptance this spec assumes; an ADR still `proposed` blocks `confirmed` |
