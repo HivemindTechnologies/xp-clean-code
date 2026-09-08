@@ -1,6 +1,6 @@
 # xp-clean-code
 
-Plugins that bring Extreme Programming and Clean Code discipline to AI-assisted development: one for how code gets built, one for validating that a pull request lives up to it. Works with **Claude Code**, **Cursor** (Team Marketplace), and **Codex**.
+Plugins that bring Extreme Programming and Clean Code discipline to AI-assisted development: one for how code gets built, one for validating that a pull request lives up to it, and one for deciding *what* gets built — a spec-driven workflow grounded in XP rather than in big design up front. Works with **Claude Code**, **Cursor** (Team Marketplace), and **Codex**.
 
 -----
 
@@ -37,7 +37,7 @@ Requires a Cursor Teams or Enterprise plan and admin access.
 2. Open **Dashboard → Settings → Plugins**.
 3. Under **Team Marketplaces**, choose **Import Marketplace** / **Import from Repo**.
 4. Paste: `https://github.com/HivemindTechnologies/xp-clean-code`
-5. Confirm both plugins (`xp-clean-code`, `pr-validation`) are detected, then save.
+5. Confirm the three plugins (`xp-clean-code`, `pr-validation`, `spec-driven`) are detected, then save.
 
 For private repos, install the Cursor GitHub App on the org/repo first (**Dashboard → Integrations**). Enable **Auto Refresh** if you want pushes to re-index the marketplace.
 
@@ -47,18 +47,22 @@ For private repos, install the Cursor GitHub App on the org/repo first (**Dashbo
 mkdir -p ~/.cursor/skills
 ln -s "$(pwd)/plugins/xp-clean-code/skills/xp-clean-code" ~/.cursor/skills/xp-clean-code
 ln -s "$(pwd)/plugins/pr-validation/skills/pr-validation" ~/.cursor/skills/pr-validation
+for s in brainstorming scaffolding spec review; do
+  ln -s "$(pwd)/plugins/spec-driven/skills/$s" ~/.cursor/skills/$s
+done
 ```
 
 Or load a plugin from `~/.cursor/plugins/local/` (symlink a plugin directory that contains `.cursor-plugin/plugin.json`).
 
 ### Codex
 
-Add this repository as a Codex plugin marketplace, then install either or both plugins:
+Add this repository as a Codex plugin marketplace, then install any or all three plugins:
 
 ```bash
 codex plugin marketplace add HivemindTechnologies/xp-clean-code --ref main
 codex plugin add xp-clean-code@xp-clean-code
 codex plugin add pr-validation@xp-clean-code
+codex plugin add spec-driven@xp-clean-code
 ```
 
 Start a new Codex conversation after installation. Codex may select a skill automatically, or you can invoke one explicitly:
@@ -66,6 +70,10 @@ Start a new Codex conversation after installation. Codex may select a skill auto
 ```text
 $xp-clean-code implement this feature
 $pr-validation validate PR 123
+$brainstorming turn this idea into an XP design brief
+$scaffolding scaffold the approved design
+$spec define the next fenced increment
+$review reconcile the project documents with the code
 ```
 
 Run `/skills` in Codex CLI or the IDE extension to browse installed skills.
@@ -137,16 +145,52 @@ plugins/pr-validation/                    # verifying what was built
 ├── .codex-plugin/
 │   └── plugin.json
 ├── commands/
-│   └── pr-validate.md                    # Claude /pr-validate adapter
+│   └── pr-validate.md                    # /pr-validate — five analyses adapter
 └── skills/
     └── pr-validation/
-        ├── SKILL.md                      # The four analyses — loaded on demand
+        ├── SKILL.md                      # The five analyses — loaded on demand
         └── references/
             ├── github-pr-workflow.md     # Shared GitHub acquisition + isolated removal checks
             ├── purity-checklist.md       # Impurity signals + absence-vs-failure signals:
             │                             #   Python, Scala, Java, TypeScript, Rust
             ├── gap-patterns.md           # Eleven coverage gap patterns, with before/after scenarios
             └── claim-verification.md     # Mutation catalogue for the removal check
+
+plugins/spec-driven/                      # deciding what to build
+├── .cursor-plugin/
+│   └── plugin.json
+├── .claude-plugin/
+│   └── plugin.json
+├── .codex-plugin/
+│   └── plugin.json
+├── commands/
+│   ├── brainstorm.md                     # /brainstorm  — idea → design brief
+│   ├── scaffold.md                       # /scaffold    — brief → roadmap, ADRs, operative doc, skeleton
+│   ├── spec.md                           # /spec        — one fenced increment, drafted → reconciled
+│   └── reconcile.md                      # /reconcile   — review docs against code; --retrofit to bootstrap
+└── skills/
+    ├── brainstorming/
+    │   ├── SKILL.md
+    │   └── references/
+    │       ├── brief-template.md         # DESIGN.md + spike record templates
+    │       └── story-checklist.md        # INVEST, hypothesis checklist, "you are designing" smells
+    ├── scaffolding/
+    │   ├── SKILL.md
+    │   └── references/
+    │       ├── roadmap-template.md       # milestones with evidence gates; one scenario per row
+    │       ├── adr-template.md           # Nygard ADRs + the pin-gate index
+    │       └── operative-context.md      # CLAUDE.md / AGENTS.md budget and the docs-current guard
+    ├── spec/
+    │   ├── SKILL.md
+    │   └── references/
+    │       ├── sync-contract.md          # THE rule set: lifecycle, scope fence, spec ⇄ feature mirror
+    │       ├── spec-template.md
+    │       └── spec-sync-guard.py        # stdlib test: spec Gherkin == feature files, both ways
+    └── review/
+        ├── SKILL.md
+        └── references/
+            ├── drift-patterns.md         # what to measure, per document pair
+            └── retrofit.md               # bringing an existing codebase under the shape
 ```
 
 The reference files are loaded on demand. `SKILL.md` stays lean in context; the detail is there when the agent needs it.
@@ -159,18 +203,45 @@ python3 scripts/validate_manifests.py
 
 ### The pr-validation plugin
 
-Where `xp-clean-code` governs how to build, `pr-validation` checks that what was built holds up. Run `/pr-validate` in Claude Code, invoke `$pr-validation` in Codex, or ask the agent to review a PR, and it produces a structured report across four analyses:
+Where `xp-clean-code` governs how to build, `pr-validation` checks that what was built holds up. Run `/pr-validate` in Claude Code, invoke `$pr-validation` in Codex, or ask the agent to review a PR, and it produces a structured report across five analyses:
 
 1. **Purity** — every changed function classified as Pure, Impure–boundary, or Impure–violation.
 1. **Idempotency** — every state transition checked for `f(f(x)) = f(x)`, and for a double-application scenario.
 1. **BDD coverage** — a coverage matrix mapping changed functions to scenarios: happy path, each failure mode, each branch, each boundary.
 1. **Protection claims** — for every assertion the PR body makes about what a check protects against, the mapped test is run with that protection removed. If it still passes, the claim is unsubstantiated: the guard is untested, unreachable, or the test passes for an unrelated reason. A protection claim nobody can break is a promise the suite does not keep.
+1. **Spec sync** — when a repository uses `docs/specs/`, every changed scenario must be authorised by the named spec and its Gherkin mirror must remain exact.
+
+### The spec-driven plugin
+
+`xp-clean-code` says how to build and `pr-validation` checks what was built. Neither says what to
+build. `spec-driven` does, in four stages that map one-to-one onto XP practices rather than onto a
+requirements → design → tasks pipeline:
+
+| Stage | XP practice | Produces | Who decides |
+|---|---|---|---|
+| **brainstorming** (`/brainstorm`, `$brainstorming`) | exploration, story writing, spikes | `docs/DESIGN.md`: problem, falsifiable hypotheses, non-goals, INVEST stories, spikes, a language seed — and no architecture | the customer picks the stories and the bets |
+| **scaffolding** (`/scaffold`, `$scaffolding`) | release planning, walking skeleton | `docs/ROADMAP.md` (one scenario per iteration, evidence-based exit gates), Nygard ADRs with a pin gate, a lean `CLAUDE.md`, Iteration 0 | the customer accepts each ADR |
+| **spec** (`/spec`, `$spec`) | iteration planning, acceptance tests | `docs/specs/NNN-*.md`: a scope fence plus the Given/When/Then scenarios that *are* the acceptance tests for one small release | the customer confirms scope; the agent builds under xp-clean-code |
+| **review** (`/reconcile`, `$review`) | retrospective | `docs/reviews/DATE-*.md`: measured drift between documents and code, open questions, risks, follow-ups sized as iterations — and no code changed | the customer sequences the follow-ups |
+
+The idea that makes the two traditions compatible: **the spec is the acceptance-test set for one
+small release plus a scope fence, not a requirements document.** Everything upstream of it is
+intent, and the precedence rule says intent is never licence to build. Scenarios live twice — in
+the spec so a human can review scope and behaviour in one document, and in the feature file so
+the runner can execute them — and `spec-sync-guard.py` holds the two copies equal, so duplication
+is safe exactly because it is checked. A scenario discovered mid-build that the spec does not
+authorise stops the work: amend (the customer confirms first) or defer, never sneak in.
+`pr-validation`'s Analysis 5 checks the same fence on every pull request.
+
+`/reconcile --retrofit` bootstraps the documents from an existing codebase — scenarios from tests,
+specs born `reconciled`, ADRs from the decisions already living in code — without inventing intent
+the code does not show.
 
 -----
 
 ## Works well with
 
-This skill focuses on *how to build*. If you also want to constrain *how to reason* — surface assumptions, avoid over-complication, make surgical changes — it pairs naturally with [andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills). The two address different failure modes and do not overlap.
+These skills focus on *how to build*, *how to check it*, and *what to build*. If you also want to constrain *how to reason* — surface assumptions, avoid over-complication, make surgical changes — it pairs naturally with [andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills). The two address different failure modes and do not overlap.
 
 -----
 

@@ -9,12 +9,19 @@ from pathlib import Path
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
-PLUGIN_NAMES = ("xp-clean-code", "pr-validation")
 MANIFESTS = {
     "Claude Code": ".claude-plugin/plugin.json",
     "Cursor": ".cursor-plugin/plugin.json",
     "Codex": ".codex-plugin/plugin.json",
 }
+
+
+def plugin_names() -> tuple[str, ...]:
+    """Every plugin directory is part of the cross-host compatibility contract."""
+    plugins_root = REPOSITORY_ROOT / "plugins"
+    return tuple(
+        path.name for path in sorted(plugins_root.iterdir()) if path.is_dir()
+    )
 
 
 def load_json(path: Path) -> dict[str, object]:
@@ -51,7 +58,7 @@ def validate_plugin(plugin_name: str) -> list[str]:
     return errors
 
 
-def validate_codex_marketplace() -> list[str]:
+def validate_codex_marketplace(plugin_names: tuple[str, ...]) -> list[str]:
     marketplace_path = REPOSITORY_ROOT / ".agents/plugins/marketplace.json"
     try:
         marketplace = load_json(marketplace_path)
@@ -63,10 +70,12 @@ def validate_codex_marketplace() -> list[str]:
         return [f"{marketplace_path}: plugins must be an array"]
 
     errors: list[str] = []
-    entries_by_name = {
-        entry.get("name"): entry for entry in entries if isinstance(entry, dict)
-    }
-    for plugin_name in PLUGIN_NAMES:
+    named_entries = [entry for entry in entries if isinstance(entry, dict)]
+    entries_by_name = {entry.get("name"): entry for entry in named_entries}
+    if len(entries_by_name) != len(named_entries):
+        errors.append(f"{marketplace_path}: plugin names must be unique")
+
+    for plugin_name in plugin_names:
         entry = entries_by_name.get(plugin_name)
         if entry is None:
             errors.append(f"{marketplace_path}: missing plugin {plugin_name!r}")
@@ -85,12 +94,13 @@ def validate_codex_marketplace() -> list[str]:
 
 
 def main() -> int:
+    names = plugin_names()
     errors = [
         error
-        for plugin_name in PLUGIN_NAMES
+        for plugin_name in names
         for error in validate_plugin(plugin_name)
     ]
-    errors.extend(validate_codex_marketplace())
+    errors.extend(validate_codex_marketplace(names))
 
     if errors:
         print("Manifest validation failed:", file=sys.stderr)

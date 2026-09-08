@@ -1,0 +1,29 @@
+{
+  "name": "spec-driven",
+  "version": "1.3.0",
+  "description": "Spec-driven development grounded in XP, from brainstorming through scaffolding, scoped specs, and reconciliation",
+  "author": {
+    "name": "Hivemind Technologies",
+    "email": "info@hivemindtechnologies.com",
+    "url": "https://hivemindtechnologies.com"
+  },
+  "homepage": "https://github.com/HivemindTechnologies/xp-clean-code#the-spec-driven-plugin",
+  "repository": "https://github.com/HivemindTechnologies/xp-clean-code",
+  "license": "MIT",
+  "keywords": ["xp", "specification", "bdd", "roadmap", "adr", "reconciliation"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Spec-Driven Development",
+    "shortDescription": "Decide what to build with an XP-grounded spec workflow",
+    "longDescription": "Turn ideas into falsifiable design briefs, walking-skeleton plans, fenced acceptance-test specs, and evidence-based document-to-code reconciliation.",
+    "developerName": "Hivemind Technologies",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "websiteURL": "https://hivemindtechnologies.com",
+    "defaultPrompt": [
+      "Turn this idea into an XP-grounded design brief.",
+      "Define the next small release as a fenced acceptance-test spec.",
+      "Reconcile the project documents with the code."
+    ]
+  }
+}
