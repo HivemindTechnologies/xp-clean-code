@@ -1,5 +1,10 @@
 {
   "name": "spec-driven",
+  "displayName": "Spec Driven",
   "description": "Spec-driven development grounded in XP: brainstorming, scaffolding, spec and review stages that decide what to build, fenced by BDD scenarios and evolutionary design",
-  "version": "1.3.0"
+  "version": "1.3.0",
+  "author": {
+    "name": "Hivemind Technologies",
+    "email": "info@hivemindtechnologies.com"
+  }
 }

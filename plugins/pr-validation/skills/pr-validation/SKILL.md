@@ -1,20 +1,11 @@
 ---
 name: pr-validation
 description: >-
-  Validate a pull request against XP and clean code standards: purity and
-  idempotency of changed functions, BDD scenario coverage, and whether every
-  protection the PR body claims ("prevents", "guards against", "blocks") is
-  backed by a test that fails when that protection is removed. Triggers on
-  "review PR", "validate PR", "PR review", "pull request validation",
-  "check coverage", "BDD coverage", "coverage gaps", "missing scenarios",
-  "test coverage", "pure function check", "verify purity", "are my functions
-  pure", "idempotency check", "verify idempotency", "is this idempotent",
-  "verify claims", "PR body claims", "unsubstantiated claim", "mutation check",
-  "does this test actually fail", "what's missing from my tests", "is this in
-  the spec", "spec sync", "scope creep in this PR", "unauthorised scenario".
-  Composes with the xp-clean-code skill: where that skill governs how to build,
-  this skill validates that what was built meets those standards; and with the
-  spec-driven plugin, whose spec fences what a PR may build (Analysis 5).
+  Audit a pull request or code diff for function purity, idempotency, BDD
+  coverage gaps, protection claims unsupported by removal checks, and spec
+  drift. Use when asked to review or validate a PR, verify test coverage, check
+  purity or idempotency, assess protection claims, or enforce a spec's scope
+  fence; do not use for ordinary implementation work.
 ---
 
 # PR Validation · Purity · Idempotency · BDD Coverage · Protection Claims · Spec Sync
@@ -28,6 +19,8 @@ The rules here are non-negotiable defaults. Deviate only when the user explicitl
 ---
 
 ## How to Run This Validation
+
+When the target is a GitHub pull request, read `references/github-pr-workflow.md` before obtaining inputs or running removal checks. A user-supplied diff does not require that workflow.
 
 1. Obtain the diff for the PR (changed files, hunks, line ranges) **and the PR body, title, and commit messages** — Analysis 4 validates the prose against the tests, and Analysis 5 reads the spec the body names.
 2. Identify every changed function, method, or procedure.
@@ -721,3 +714,4 @@ Verdict:        PASS only when all five sections have zero actionable findings
 For language-specific impurity detection patterns, see `references/purity-checklist.md`.
 For worked examples of each coverage gap pattern, see `references/gap-patterns.md`.
 For the claim-to-mutation catalogue and worked removal checks, see `references/claim-verification.md`.
+For acquiring a GitHub pull request and safely isolating removal checks, see `references/github-pr-workflow.md`.

@@ -1,6 +1,6 @@
 # xp-clean-code
 
-Plugins that bring Extreme Programming and Clean Code discipline to AI-assisted development: one for how code gets built, one for validating that a pull request lives up to it, and one for deciding *what* gets built — a spec-driven workflow grounded in XP rather than in big design up front. Works with **Cursor** (Team Marketplace) and **Claude Code**.
+Plugins that bring Extreme Programming and Clean Code discipline to AI-assisted development: one for how code gets built, one for validating that a pull request lives up to it, and one for deciding *what* gets built — a spec-driven workflow grounded in XP rather than in big design up front. Works with **Claude Code**, **Cursor** (Team Marketplace), and **Codex**.
 
 -----
 
@@ -12,7 +12,7 @@ At [Hivemind Technologies](https://hivemindtechnologies.com), we build scalabe d
 
 ## What this skill does
 
-AI coding agents are remarkably capable, but left unconstrained they tend toward the same failure modes as a talented developer working without discipline: skipping tests, over-engineering, and conflating building with cleaning. This skill gives Claude Code a concrete methodology to follow — one that engineers have used to ship reliable software for decades.
+AI coding agents are remarkably capable, but left unconstrained they tend toward the same failure modes as a talented developer working without discipline: skipping tests, over-engineering, and conflating building with cleaning. This skill gives the agent a concrete methodology to follow — one that engineers have used to ship reliable software for decades.
 
 It encodes eight principles:
 
@@ -54,6 +54,30 @@ done
 
 Or load a plugin from `~/.cursor/plugins/local/` (symlink a plugin directory that contains `.cursor-plugin/plugin.json`).
 
+### Codex
+
+Add this repository as a Codex plugin marketplace, then install any or all three plugins:
+
+```bash
+codex plugin marketplace add HivemindTechnologies/xp-clean-code --ref main
+codex plugin add xp-clean-code@xp-clean-code
+codex plugin add pr-validation@xp-clean-code
+codex plugin add spec-driven@xp-clean-code
+```
+
+Start a new Codex conversation after installation. Codex may select a skill automatically, or you can invoke one explicitly:
+
+```text
+$xp-clean-code implement this feature
+$pr-validation validate PR 123
+$brainstorming turn this idea into an XP design brief
+$scaffolding scaffold the approved design
+$spec define the next fenced increment
+$review reconcile the project documents with the code
+```
+
+Run `/skills` in Codex CLI or the IDE extension to browse installed skills.
+
 ### Claude Code
 
 **As a plugin (recommended — applies across all projects):**
@@ -87,16 +111,22 @@ curl https://raw.githubusercontent.com/HivemindTechnologies/xp-clean-code/main/p
 ## What’s included
 
 ```
+.agents/plugins/
+└── marketplace.json                      # Codex marketplace index
 .cursor-plugin/
 └── marketplace.json                      # Cursor Team Marketplace index
 .claude-plugin/
 └── marketplace.json                      # Claude Code marketplace index
+scripts/
+└── validate_manifests.py                 # Cross-host name/version consistency check
 
 plugins/xp-clean-code/                    # how to build
 ├── .cursor-plugin/
 │   └── plugin.json                       # Cursor plugin manifest
 ├── .claude-plugin/
 │   └── plugin.json                       # Claude Code plugin manifest
+├── .codex-plugin/
+│   └── plugin.json                       # Codex plugin manifest
 └── skills/
     └── xp-clean-code/
         ├── SKILL.md                      # Core principles — loaded on demand
@@ -112,12 +142,15 @@ plugins/pr-validation/                    # verifying what was built
 │   └── plugin.json
 ├── .claude-plugin/
 │   └── plugin.json
+├── .codex-plugin/
+│   └── plugin.json
 ├── commands/
-│   └── pr-validate.md                    # /pr-validate — runs the check against a GitHub PR
+│   └── pr-validate.md                    # /pr-validate — five analyses adapter
 └── skills/
     └── pr-validation/
-        ├── SKILL.md                      # The four analyses — loaded on demand
+        ├── SKILL.md                      # The five analyses — loaded on demand
         └── references/
+            ├── github-pr-workflow.md     # Shared GitHub acquisition + isolated removal checks
             ├── purity-checklist.md       # Impurity signals + absence-vs-failure signals:
             │                             #   Python, Scala, Java, TypeScript, Rust
             ├── gap-patterns.md           # Eleven coverage gap patterns, with before/after scenarios
@@ -127,6 +160,8 @@ plugins/spec-driven/                      # deciding what to build
 ├── .cursor-plugin/
 │   └── plugin.json
 ├── .claude-plugin/
+│   └── plugin.json
+├── .codex-plugin/
 │   └── plugin.json
 ├── commands/
 │   ├── brainstorm.md                     # /brainstorm  — idea → design brief
@@ -160,14 +195,21 @@ plugins/spec-driven/                      # deciding what to build
 
 The reference files are loaded on demand. `SKILL.md` stays lean in context; the detail is there when the agent needs it.
 
+Validate the marketplace and keep the Claude Code, Cursor, and Codex manifest names and versions aligned with:
+
+```bash
+python3 scripts/validate_manifests.py
+```
+
 ### The pr-validation plugin
 
-Where `xp-clean-code` governs how to build, `pr-validation` checks that what was built holds up. Run `/pr-validate` on a PR — or ask Claude to review one — and it produces a structured report across four analyses:
+Where `xp-clean-code` governs how to build, `pr-validation` checks that what was built holds up. Run `/pr-validate` in Claude Code, invoke `$pr-validation` in Codex, or ask the agent to review a PR, and it produces a structured report across five analyses:
 
 1. **Purity** — every changed function classified as Pure, Impure–boundary, or Impure–violation.
 1. **Idempotency** — every state transition checked for `f(f(x)) = f(x)`, and for a double-application scenario.
 1. **BDD coverage** — a coverage matrix mapping changed functions to scenarios: happy path, each failure mode, each branch, each boundary.
 1. **Protection claims** — for every assertion the PR body makes about what a check protects against, the mapped test is run with that protection removed. If it still passes, the claim is unsubstantiated: the guard is untested, unreachable, or the test passes for an unrelated reason. A protection claim nobody can break is a promise the suite does not keep.
+1. **Spec sync** — when a repository uses `docs/specs/`, every changed scenario must be authorised by the named spec and its Gherkin mirror must remain exact.
 
 ### The spec-driven plugin
 
@@ -177,10 +219,10 @@ requirements → design → tasks pipeline:
 
 | Stage | XP practice | Produces | Who decides |
 |---|---|---|---|
-| **brainstorming** (`/brainstorm`) | exploration, story writing, spikes | `docs/DESIGN.md`: problem, falsifiable hypotheses, non-goals, INVEST stories, spikes, a language seed — and no architecture | the customer picks the stories and the bets |
-| **scaffolding** (`/scaffold`) | release planning, walking skeleton | `docs/ROADMAP.md` (one scenario per iteration, evidence-based exit gates), Nygard ADRs with a pin gate, a lean `CLAUDE.md`, Iteration 0 | the customer accepts each ADR |
-| **spec** (`/spec`) | iteration planning, acceptance tests | `docs/specs/NNN-*.md`: a scope fence plus the Given/When/Then scenarios that *are* the acceptance tests for one small release | the customer confirms scope; the agent builds under xp-clean-code |
-| **review** (`/reconcile`) | retrospective | `docs/reviews/DATE-*.md`: measured drift between documents and code, open questions, risks, follow-ups sized as iterations — and no code changed | the customer sequences the follow-ups |
+| **brainstorming** (`/brainstorm`, `$brainstorming`) | exploration, story writing, spikes | `docs/DESIGN.md`: problem, falsifiable hypotheses, non-goals, INVEST stories, spikes, a language seed — and no architecture | the customer picks the stories and the bets |
+| **scaffolding** (`/scaffold`, `$scaffolding`) | release planning, walking skeleton | `docs/ROADMAP.md` (one scenario per iteration, evidence-based exit gates), Nygard ADRs with a pin gate, a lean `CLAUDE.md`, Iteration 0 | the customer accepts each ADR |
+| **spec** (`/spec`, `$spec`) | iteration planning, acceptance tests | `docs/specs/NNN-*.md`: a scope fence plus the Given/When/Then scenarios that *are* the acceptance tests for one small release | the customer confirms scope; the agent builds under xp-clean-code |
+| **review** (`/reconcile`, `$review`) | retrospective | `docs/reviews/DATE-*.md`: measured drift between documents and code, open questions, risks, follow-ups sized as iterations — and no code changed | the customer sequences the follow-ups |
 
 The idea that makes the two traditions compatible: **the spec is the acceptance-test set for one
 small release plus a scope fence, not a requirements document.** Everything upstream of it is
