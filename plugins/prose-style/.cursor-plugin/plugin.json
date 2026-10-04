@@ -1,0 +1,10 @@
+{
+  "name": "prose-style",
+  "displayName": "Prose Style",
+  "description": "House prose style for AI-written text: clear, concrete, calibrated English, plus a /revise command that audits and rewrites existing text",
+  "version": "1.0.0",
+  "author": {
+    "name": "Hivemind Technologies",
+    "email": "info@hivemindtechnologies.com"
+  }
+}

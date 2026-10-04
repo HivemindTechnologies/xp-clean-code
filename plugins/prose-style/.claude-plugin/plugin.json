@@ -1,0 +1,5 @@
+{
+  "name": "prose-style",
+  "description": "House prose style for AI-written text: clear, concrete, calibrated English, plus a /revise command that audits and rewrites existing text",
+  "version": "1.0.0"
+}

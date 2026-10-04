@@ -1,29 +1,29 @@
 # xp-clean-code
 
-Plugins that bring Extreme Programming and Clean Code discipline to AI-assisted development: one for how code gets built, one for validating that a pull request lives up to it, and one for deciding *what* gets built — a spec-driven workflow grounded in XP rather than in big design up front. Works with **Claude Code**, **Cursor** (Team Marketplace), and **Codex**.
+Plugins that bring Extreme Programming and Clean Code discipline to AI-assisted development: one for building code, one for validating that a pull request lives up to it, one for deciding *what* gets built (a spec-driven workflow grounded in XP rather than in big design up front), and one for the prose written around all three. Works with **Claude Code**, **Cursor** (Team Marketplace), and **Codex**.
 
 -----
 
 ## About Hivemind Technologies
 
-At [Hivemind Technologies](https://hivemindtechnologies.com), we build scalabe data platforms and machine learning systems for finance, energy and mobility sectors. Our engineering culture is rooted in the belief that software quality is not a trade-off against delivery speed — it is what makes sustained delivery possible. We practice test-first development, design through small increments, and treat code clarity as a first-class concern. This skill is a direct expression of those values, made available for AI coding agents.
+At [Hivemind Technologies](https://hivemindtechnologies.com), we build scalable data platforms and machine learning systems for the finance, energy, and mobility sectors. Our engineering culture is rooted in the belief that software quality is not a trade-off against delivery speed; it is what makes sustained delivery possible. We practise test-first development, design through small increments, and treat code clarity as a first-class concern. These plugins bring those values to AI coding agents.
 
 -----
 
-## What this skill does
+## What the `xp-clean-code` Skill Does
 
-AI coding agents are remarkably capable, but left unconstrained they tend toward the same failure modes as a talented developer working without discipline: skipping tests, over-engineering, and conflating building with cleaning. This skill gives the agent a concrete methodology to follow — one that engineers have used to ship reliable software for decades.
+AI coding agents are remarkably capable, but left unconstrained they tend toward the same failure modes as a talented developer working without discipline: skipping tests, over-engineering, and conflating building with cleaning. This skill gives the agent a concrete method to follow, one that engineers have used to ship reliable software for decades.
 
 It encodes eight principles:
 
-1. **Test First** — the RED → GREEN → CLEAN cycle, enforced strictly. No production code without a failing test.
-1. **BDD Scenarios as Success Criteria** — Given/When/Then scenarios are written before tests, making intent explicit and verifiable before a line of implementation exists.
-1. **One Step at a Time** — one failing test at a time, one scenario per commit. No speculative work, no big-bang implementations.
-1. **Clean Code Invariants** — names that reveal intent, functions that do one thing, comments that explain why rather than what, no surprise side effects.
-1. **Refactor as a Separate Phase** — structural improvements are always made after green, never mixed with feature work.
-1. **Domain-Driven Design** — code speaks the language of the domain. Bounded contexts enforce explicit boundaries. Value objects replace primitives. Domain events model facts as immutable values. Repositories abstract persistence from domain logic.
-1. **Functional Core** — pure functions as the default, referential transparency as the goal. Side effects are pushed to the edges. Errors are modelled as `Either`/`Result` types, not exceptions. Absent values are `Option`, not null. State changes return new values; nothing mutates in place. Where the language supports it, function composition (including monadic chains) builds complex behaviour from simple, testable parts.
-1. **Total Types and Explicit Outcomes** — the decision rule for *which* type carries an outcome. `Option` only where absence needs no explanation; `Either`/`Result` where the caller may need to distinguish, report, recover from, or test the failure. Null never enters the typed core — nullable values are normalised at the boundary. Optionals that depend on each other become a sum type, so invalid combinations cannot be constructed. Closed types are eliminated exhaustively, with no default branch and no forced unwrap. Exceptions keep a defined role: broken invariants and defects, not outcomes.
+1. **Test First:** the RED → GREEN → CLEAN cycle, enforced strictly. No production code without a failing test.
+1. **BDD Scenarios as Success Criteria:** Given/When/Then scenarios are written before tests, making intent explicit and verifiable before a line of implementation exists.
+1. **One Step at a Time:** one failing test at a time, one scenario per commit. No speculative work, no big-bang implementations.
+1. **Clean Code Invariants:** names that reveal intent, functions that do one thing, comments that explain why rather than what, no surprise side effects.
+1. **Refactor as a Separate Phase:** structural improvements are always made after green, never mixed with feature work.
+1. **Domain-Driven Design:** code speaks the language of the domain. Bounded contexts enforce explicit boundaries. Value objects replace primitives. Domain events model facts as immutable values. Repositories abstract persistence from domain logic.
+1. **Functional Core:** pure functions as the default, referential transparency as the goal. Side effects are pushed to the edges. Errors are modelled as `Either`/`Result` types, not exceptions. Absent values are `Option`, not null. State changes return new values; nothing mutates in place. Where the language supports it, function composition (including monadic chains) builds complex behaviour from simple, testable parts.
+1. **Total Types and Explicit Outcomes:** the decision rule for *which* type carries an outcome. `Option` only where absence needs no explanation; `Either`/`Result` where the caller may need to distinguish, report, recover from, or test the failure. Null never enters the typed core; nullable values are normalised at the boundary. Optionals that depend on each other become a sum type, so invalid combinations cannot be constructed. Closed types are eliminated exhaustively, with no default branch and no forced unwrap. Exceptions keep a defined role: broken invariants and defects, not outcomes.
 
 -----
 
@@ -37,7 +37,7 @@ Requires a Cursor Teams or Enterprise plan and admin access.
 2. Open **Dashboard → Settings → Plugins**.
 3. Under **Team Marketplaces**, choose **Import Marketplace** / **Import from Repo**.
 4. Paste: `https://github.com/HivemindTechnologies/xp-clean-code`
-5. Confirm the three plugins (`xp-clean-code`, `pr-validation`, `spec-driven`) are detected, then save.
+5. Confirm the four plugins (`xp-clean-code`, `pr-validation`, `spec-driven`, `prose-style`) are detected, then save.
 
 For private repos, install the Cursor GitHub App on the org/repo first (**Dashboard → Integrations**). Enable **Auto Refresh** if you want pushes to re-index the marketplace.
 
@@ -50,19 +50,23 @@ ln -s "$(pwd)/plugins/pr-validation/skills/pr-validation" ~/.cursor/skills/pr-va
 for s in brainstorming scaffolding spec review; do
   ln -s "$(pwd)/plugins/spec-driven/skills/$s" ~/.cursor/skills/$s
 done
+for s in prose-style revise; do
+  ln -s "$(pwd)/plugins/prose-style/skills/$s" ~/.cursor/skills/$s
+done
 ```
 
 Or load a plugin from `~/.cursor/plugins/local/` (symlink a plugin directory that contains `.cursor-plugin/plugin.json`).
 
 ### Codex
 
-Add this repository as a Codex plugin marketplace, then install any or all three plugins:
+Add this repository as a Codex plugin marketplace, then install any or all four plugins:
 
 ```bash
 codex plugin marketplace add HivemindTechnologies/xp-clean-code --ref main
 codex plugin add xp-clean-code@xp-clean-code
 codex plugin add pr-validation@xp-clean-code
 codex plugin add spec-driven@xp-clean-code
+codex plugin add prose-style@xp-clean-code
 ```
 
 Start a new Codex conversation after installation. Codex may select a skill automatically, or you can invoke one explicitly:
@@ -74,13 +78,15 @@ $brainstorming turn this idea into an XP design brief
 $scaffolding scaffold the approved design
 $spec define the next fenced increment
 $review reconcile the project documents with the code
+$prose-style write the release notes for this version
+$revise README.md
 ```
 
 Run `/skills` in Codex CLI or the IDE extension to browse installed skills.
 
 ### Claude Code
 
-**As a plugin (recommended — applies across all projects):**
+**As a plugin (recommended; applies across all projects):**
 
 Add the repo as a plugin source in `~/.claude/settings.json`:
 
@@ -108,7 +114,7 @@ curl https://raw.githubusercontent.com/HivemindTechnologies/xp-clean-code/main/p
 
 -----
 
-## What’s included
+## What Is Included
 
 ```
 .agents/plugins/
@@ -191,6 +197,26 @@ plugins/spec-driven/                      # deciding what to build
         └── references/
             ├── drift-patterns.md         # what to measure, per document pair
             └── retrofit.md               # bringing an existing codebase under the shape
+
+plugins/prose-style/                      # writing about it
+├── .cursor-plugin/
+│   └── plugin.json
+├── .claude-plugin/
+│   └── plugin.json
+├── .codex-plugin/
+│   └── plugin.json
+├── commands/
+│   └── revise.md                         # /revise — audit, confirm, edit in place, re-audit, diff
+└── skills/
+    ├── prose-style/
+    │   ├── SKILL.md                      # 21 rules + 5 house conventions, applied while writing
+    │   └── references/
+    │       ├── rules.md                  # every rule with a bad and a good example, and why
+    │       └── word-list.md              # plain swaps, machine-written markers, confused pairs
+    └── revise/
+        ├── SKILL.md                      # the second pass over existing text
+        └── references/
+            └── revision-contract.md      # hard invariants: no new facts, structure preserved
 ```
 
 The reference files are loaded on demand. `SKILL.md` stays lean in context; the detail is there when the agent needs it.
@@ -201,17 +227,17 @@ Validate the marketplace and keep the Claude Code, Cursor, and Codex manifest na
 python3 scripts/validate_manifests.py
 ```
 
-### The pr-validation plugin
+### The `pr-validation` Plugin
 
 Where `xp-clean-code` governs how to build, `pr-validation` checks that what was built holds up. Run `/pr-validate` in Claude Code, invoke `$pr-validation` in Codex, or ask the agent to review a PR, and it produces a structured report across five analyses:
 
-1. **Purity** — every changed function classified as Pure, Impure–boundary, or Impure–violation.
-1. **Idempotency** — every state transition checked for `f(f(x)) = f(x)`, and for a double-application scenario.
-1. **BDD coverage** — a coverage matrix mapping changed functions to scenarios: happy path, each failure mode, each branch, each boundary.
-1. **Protection claims** — for every assertion the PR body makes about what a check protects against, the mapped test is run with that protection removed. If it still passes, the claim is unsubstantiated: the guard is untested, unreachable, or the test passes for an unrelated reason. A protection claim nobody can break is a promise the suite does not keep.
-1. **Spec sync** — when a repository uses `docs/specs/`, every changed scenario must be authorised by the named spec and its Gherkin mirror must remain exact.
+1. **Purity:** every changed function classified as Pure, Impure–boundary, or Impure–violation.
+1. **Idempotency:** every state transition checked for `f(f(x)) = f(x)`, and for a double-application scenario.
+1. **BDD coverage:** a coverage matrix mapping changed functions to scenarios: happy path, each failure mode, each branch, each boundary.
+1. **Protection claims:** for every assertion the PR body makes about what a check protects against, the mapped test is run with that protection removed. If it still passes, the claim is unsubstantiated: the guard is untested, unreachable, or the test passes for an unrelated reason. A protection claim nobody can break is a promise the suite does not keep.
+1. **Spec sync:** when a repository uses `docs/specs/`, every changed scenario must be authorised by the named spec and its Gherkin mirror must remain exact.
 
-### The spec-driven plugin
+### The `spec-driven` Plugin
 
 `xp-clean-code` says how to build and `pr-validation` checks what was built. Neither says what to
 build. `spec-driven` does, in four stages that map one-to-one onto XP practices rather than onto a
@@ -219,29 +245,52 @@ requirements → design → tasks pipeline:
 
 | Stage | XP practice | Produces | Who decides |
 |---|---|---|---|
-| **brainstorming** (`/brainstorm`, `$brainstorming`) | exploration, story writing, spikes | `docs/DESIGN.md`: problem, falsifiable hypotheses, non-goals, INVEST stories, spikes, a language seed — and no architecture | the customer picks the stories and the bets |
+| **brainstorming** (`/brainstorm`, `$brainstorming`) | exploration, story writing, spikes | `docs/DESIGN.md`: problem, falsifiable hypotheses, non-goals, INVEST stories, spikes, a language seed; no architecture | the customer picks the stories and the bets |
 | **scaffolding** (`/scaffold`, `$scaffolding`) | release planning, walking skeleton | `docs/ROADMAP.md` (one scenario per iteration, evidence-based exit gates), Nygard ADRs with a pin gate, a lean `CLAUDE.md`, Iteration 0 | the customer accepts each ADR |
 | **spec** (`/spec`, `$spec`) | iteration planning, acceptance tests | `docs/specs/NNN-*.md`: a scope fence plus the Given/When/Then scenarios that *are* the acceptance tests for one small release | the customer confirms scope; the agent builds under xp-clean-code |
-| **review** (`/reconcile`, `$review`) | retrospective | `docs/reviews/DATE-*.md`: measured drift between documents and code, open questions, risks, follow-ups sized as iterations — and no code changed | the customer sequences the follow-ups |
+| **review** (`/reconcile`, `$review`) | retrospective | `docs/reviews/DATE-*.md`: measured drift between documents and code, open questions, risks, follow-ups sized as iterations; no code changed | the customer sequences the follow-ups |
 
-The idea that makes the two traditions compatible: **the spec is the acceptance-test set for one
+The idea that reconciles XP with spec-driven development: **the spec is the acceptance-test set for one
 small release plus a scope fence, not a requirements document.** Everything upstream of it is
-intent, and the precedence rule says intent is never licence to build. Scenarios live twice — in
-the spec so a human can review scope and behaviour in one document, and in the feature file so
-the runner can execute them — and `spec-sync-guard.py` holds the two copies equal, so duplication
-is safe exactly because it is checked. A scenario discovered mid-build that the spec does not
+intent, and the precedence rule says intent is never licence to build. Scenarios live twice: in
+the spec, so a human can review scope and behaviour in one document, and in the feature file, so
+the runner can execute them. `spec-sync-guard.py` holds the two copies equal, so the duplication
+is safe because it is checked. A scenario discovered mid-build that the spec does not
 authorise stops the work: amend (the customer confirms first) or defer, never sneak in.
 `pr-validation`'s Analysis 5 checks the same fence on every pull request.
 
-`/reconcile --retrofit` bootstraps the documents from an existing codebase — scenarios from tests,
-specs born `reconciled`, ADRs from the decisions already living in code — without inventing intent
-the code does not show.
+`/reconcile --retrofit` bootstraps the documents from an existing codebase without inventing intent
+the code does not show. It derives scenarios from tests, creates specs already `reconciled`, and
+records ADRs for the decisions already living in code.
+
+### The `prose-style` Plugin
+
+The other three plugins govern code and the decisions behind it. `prose-style` governs the text
+written around them: documentation, ADRs, specs, commit messages, pull request descriptions, and
+error messages. It has two skills.
+
+**prose-style** applies on its own whenever the agent writes prose for a human reader. Its 21
+rules draw on Strunk, Orwell, Pinker, and Gopen and Swan. Several target the habits of
+machine-written text, such as stock transitions, forced lists of three, and staged contrasts.
+Five house conventions sit on top: British spelling, Title Case headings, no contractions, very
+few em dashes, and the serial comma.
+
+**revise** (`/revise`, `$revise`) is the second pass over text that already exists. It audits the
+text rule by rule and prints a scorecard with line numbers and verbatim excerpts. Once you
+confirm, it edits the file in place, changing only the flagged passages, then audits again and
+shows the diff. Its revision contract forbids new facts: an unsupported claim stays flagged for
+the author instead of gaining an invented source. This README was revised with it.
+
+Sources: William Strunk Jr.'s *The Elements of Style* (1918, public domain), obra's
+[the-elements-of-style](https://github.com/obra/the-elements-of-style), and
+[agent-style](https://github.com/yzhao062/agent-style) by Yue Zhao (CC BY 4.0). The agent-style
+rule set and its `style-review` skill shaped both skills here; the wording is our own.
 
 -----
 
-## Works well with
+## Works Well With
 
-These skills focus on *how to build*, *how to check it*, and *what to build*. If you also want to constrain *how to reason* — surface assumptions, avoid over-complication, make surgical changes — it pairs naturally with [andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills). The two address different failure modes and do not overlap.
+These plugins cover *how to build*, *how to check it*, *what to build*, and *how to write about it*. To also constrain *how to reason* (surface assumptions, avoid over-complication, make surgical changes), pair them with [andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills). The two address different failure modes and do not overlap.
 
 -----
 
