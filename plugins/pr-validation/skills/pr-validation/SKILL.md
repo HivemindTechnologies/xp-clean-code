@@ -10,7 +10,7 @@ description: >-
 
 # PR Validation · Purity · Idempotency · BDD Coverage · Protection Claims · Spec Sync
 
-This skill audits a pull request against the quality standards established in the xp-clean-code skill. It does not enforce how to build — it verifies that what was built meets the standards.
+This skill audits a pull request against the quality standards established in the xp-clean-code skill. It does not enforce how to build; it verifies that what was built meets the standards.
 
 Run this validation on every PR before it is considered ready for review. The output is a structured report, not a verdict by itself. The report identifies findings; the author decides how to address them.
 
@@ -22,7 +22,7 @@ The rules here are non-negotiable defaults. Deviate only when the user explicitl
 
 When the target is a GitHub pull request, read `references/github-pr-workflow.md` before obtaining inputs or running removal checks. A user-supplied diff does not require that workflow.
 
-1. Obtain the diff for the PR (changed files, hunks, line ranges) **and the PR body, title, and commit messages** — Analysis 4 validates the prose against the tests, and Analysis 5 reads the spec the body names.
+1. Obtain the diff for the PR (changed files, hunks, line ranges) **and the PR body, title, and commit messages**. Analysis 4 validates the prose against the tests, and Analysis 5 reads the spec the body names.
 2. Identify every changed function, method, or procedure.
 3. Run each of the five analyses below independently.
 4. Produce the structured gap report.
@@ -38,7 +38,7 @@ Always work from the diff. Do not analyse unchanged code unless a changed functi
 | 5 · Spec sync | Is every scenario and behaviour in the diff authorised by the spec the PR names, and is the spec's mirror intact? |
 
 Analysis 5 applies only to repositories that keep specs under `docs/specs/` (the spec-driven plugin's
-convention). Where that directory does not exist, report it as not applicable — explicitly, as with
+convention). Where that directory does not exist, report it explicitly as not applicable, as with
 Analysis 4.
 
 ---
@@ -51,7 +51,7 @@ For each changed function, determine whether it is pure.
 
 A function is **pure** if:
 1. It always returns the same output for the same input (referential transparency).
-2. It produces no observable side effects — no writes to shared state, no I/O, no mutation of arguments.
+2. It produces no observable side effects: no writes to shared state, no I/O, no mutation of arguments.
 
 A function is **impure** if it:
 - Reads from or writes to a database, file system, or network.
@@ -88,7 +88,7 @@ If any box is checked and the function is **not** at the I/O boundary, classify 
 
 ### Signature Honesty
 
-A pure function can still lie. Purity says the signature hides no *effects*; these questions ask whether it hides an *outcome* — which is the same defect one layer up, and the reason a caller ends up unable to test a branch that exists.
+A pure function can still lie. Purity says the signature hides no *effects*; these questions ask whether it hides an *outcome*. That is the same defect one layer up, and the reason a caller ends up unable to test a branch that exists.
 
 ```
 □ Does an Optional/nullable return stand in for a failure the caller must distinguish?
@@ -110,8 +110,8 @@ Findings here are reported in the Analysis 1 table with the classification **Pur
 
 A function may be classified as **Impure — boundary** (acceptable) only when **all** of the following hold:
 
-1. It lives in an infrastructure or adapter layer — not in `domain/`, `core/`, or `logic/`.
-2. All domain logic it invokes is pure — I/O wraps pure functions, not the reverse.
+1. It lives in an infrastructure or adapter layer, not in `domain/`, `core/`, or `logic/`.
+2. All domain logic it invokes is pure: I/O wraps pure functions, not the reverse.
 3. Its tests isolate the I/O with test doubles (in-memory store, stub clock, fake HTTP server).
 4. Its name or package makes the side effect obvious (`UserRepository`, `EmailSender`, `OrderController`).
 
@@ -174,7 +174,7 @@ async fn confirm_order(order: &mut Order, pool: &PgPool) {
 }
 ```
 
-The fix is the same split — `fn confirm(self) -> Order` in the domain, `async fn` in the adapter:
+The fix is the same split (`fn confirm(self) -> Order` in the domain, `async fn` in the adapter):
 
 ```rust
 // Functional core — total, synchronous, no dependencies on infrastructure
@@ -220,7 +220,7 @@ Idempotency analysis applies to:
 - HTTP endpoints that are not idempotent by protocol (POST with side effects, non-safe PATCH).
 - Scheduled jobs and background workers.
 
-Idempotency does **not** need to be verified for pure read operations or pure transformations — by definition, applying a pure function twice is always safe.
+Idempotency does **not** need to be verified for pure read operations or pure transformations; by definition, applying a pure function twice is always safe.
 
 ### Verification Checklist
 
@@ -302,7 +302,7 @@ pub fn confirm_once(order: Order) -> (Order, Vec<DomainEvent>) {
 ```
 
 Returning events as a value rather than publishing them makes the "no duplicate event" half of the
-idempotency scenario directly assertable — a Rust function that publishes from inside the domain
+idempotency scenario directly assertable. A Rust function that publishes from inside the domain
 fails both Analysis 1 and Analysis 2.
 
 ---
@@ -345,7 +345,7 @@ For each scenario found, verify it meets the xp-clean-code BDD standard:
 
 - **One `When` per scenario.** If you need two `When`s, you have two scenarios.
 - **`Then` is a verifiable assertion**, not a vague goal. "Then the error is handled" is not verifiable. "Then the caller receives error code CARD_EXPIRED" is.
-- **`Given` makes preconditions explicit** — no invisible setup hidden inside fixtures.
+- **`Given` makes preconditions explicit:** no invisible setup hidden inside fixtures.
 - **No implementation detail** in the scenario. No class names, method signatures, or SQL in Given/When/Then.
 
 ### Common Gap Patterns
@@ -360,10 +360,10 @@ These patterns reliably indicate missing coverage. Check each one for every chan
 | **Uncovered branch** | An `if`/`when`/`match` branch in the function has no corresponding scenario |
 | **Vague `Then`** | The assertion is not verifiable ("handled gracefully", "appropriate message") |
 | **Hidden fixture** | `Given` is one line but the fixture sets up significant hidden preconditions |
-| **Bundled `When`** | A scenario contains two actions — it is two scenarios collapsed into one |
+| **Bundled `When`** | A scenario contains two actions; it is two scenarios collapsed into one |
 | **Missing contract test** | A dependency is always mocked; no scenario verifies the real contract |
 | **No rollback scenario** | A multi-step write has no scenario for what happens if a later step fails |
-| **Toothless test** | The test passes when the code it claims to cover is deleted — see Analysis 4 |
+| **Toothless test** | The test passes when the code it claims to cover is deleted (see Analysis 4) |
 | **Absence conflated with failure** | An `Option` whose empty case has two causes; no scenario tells them apart |
 
 For worked examples of each pattern with before/after scenarios, see `references/gap-patterns.md`.
@@ -374,9 +374,9 @@ For worked examples of each pattern with before/after scenarios, see `references
 
 **For every assertion the PR body makes about what a check protects against, verify there is a test that fails when that protection is removed.**
 
-A claim of protection is a testable statement. If removing the guard leaves the suite green, the claim is unsubstantiated — the guard is untested, unreachable, or the test passes for an unrelated reason. This analysis is mandatory and applies to the PR body, the PR title, and the commit messages, whoever wrote them.
+A claim of protection is a testable statement. If removing the guard leaves the suite green, the claim is unsubstantiated: the guard is untested, unreachable, or the test passes for an unrelated reason. This analysis is mandatory and applies to the PR body, the PR title, and the commit messages, whoever wrote them.
 
-### Step 1 — Extract the claims
+### Step 1: Extract the Claims
 
 Read the PR body, title, and commit messages. Enumerate every statement that asserts the change prevents, blocks, or handles something. Claim verbs to look for:
 
@@ -388,20 +388,20 @@ handles · catches · retries · deduplicates · no longer possible · can't hap
 
 Statements that are **not** claims and need no test: renames, refactors with no behaviour change, documentation edits, dependency bumps, formatting, and descriptions of *what the code does* rather than *what it prevents* ("adds a `Region` enum" is not a claim; "prevents shipping to unsupported regions" is).
 
-Record each claim verbatim — the exact sentence from the body — so the report can be checked against the source.
+Record each claim verbatim (the exact sentence from the body) so the report can be checked against the source.
 
-### Step 2 — Locate the protection and its test
+### Step 2: Locate the Protection and Its Test
 
 For each claim, identify two things in the diff:
 
-1. **The protection site** — the specific lines that implement the guard: the validation, the conditional, the constraint, the retry limit, the idempotency key.
-2. **The covering test** — the test or scenario that asserts the protected behaviour.
+1. **The protection site:** the specific lines that implement the guard (the validation, the conditional, the constraint, the retry limit, the idempotency key).
+2. **The covering test:** the test or scenario that asserts the protected behaviour.
 
 If you cannot find the protection site, the claim describes something the diff does not do. Flag it immediately as **UNSUBSTANTIATED** and stop; there is nothing to mutate.
 
-If you cannot find a covering test, the claim is **UNSUBSTANTIATED**. Do not proceed to Step 3 — record the missing scenario instead.
+If you cannot find a covering test, the claim is **UNSUBSTANTIATED**. Do not proceed to Step 3; record the missing scenario instead.
 
-### Step 3 — The removal check
+### Step 3: The Removal Check
 
 Establish a green baseline, then remove the protection and re-run only the mapped tests. **The mapped test must fail.**
 
@@ -434,20 +434,20 @@ Establish a green baseline, then remove the protection and re-run only the mappe
 | Outcome | Verdict | Meaning |
 |---|---|---|
 | Mapped test fails, for the claimed reason | **VERIFIED** | The claim is backed by a test with teeth |
-| Mapped test still passes | **NOT DETECTED** | The test does not exercise the protection — over-mocked, wrong path, weak assertion, or the guard is unreachable |
+| Mapped test still passes | **NOT DETECTED** | The test does not exercise the protection: over-mocked, wrong path, weak assertion, or the guard is unreachable |
 | A *different* test fails, mapped test passes | **MISATTRIBUTED** | Coverage exists but the mapped scenario is the wrong one; re-map and repeat |
-| Only a compile / type error results | **INCONCLUSIVE** | The mutation was too coarse — the type system rejected it, not the test. Try a subtler mutation that still compiles |
+| Only a compile / type error results | **INCONCLUSIVE** | The mutation was too coarse: the type system rejected it, not the test. Try a subtler mutation that still compiles |
 | Tests cannot be run in this environment | **UNVERIFIABLE** | Report the claim as unverified and say why. Never report VERIFIED from reading code alone |
 
-### Safety rules for the removal check
+### Safety Rules for the Removal Check
 
 - Mutate a scratch copy or a throwaway worktree, never the branch under review.
-- **Never commit a mutation.** Restore after every single one, and verify the restore before the next.
+- **Never commit a mutation.** Restore after every one, and verify the restore before the next.
 - One mutation at a time. Two simultaneous mutations make the failure unattributable.
-- Run only the mapped tests, not the full suite — but confirm the full suite's baseline is green before you start, or a pre-existing failure will read as a verified claim.
+- Run only the mapped tests, not the full suite. Confirm the full suite's baseline is green before you start, or a pre-existing failure will read as a verified claim.
 - If the toolchain is unavailable (no dependencies installed, no test runner, secrets required), report **UNVERIFIABLE** with the reason. A static reading is not a removal check, and must not be presented as one.
 
-### When you are the author of the PR body
+### When You Are the Author of the PR Body
 
 The same rule applies to your own writing, before the PR is opened:
 
@@ -467,25 +467,25 @@ production changes must serve those scenarios and nothing else.**
 
 This is the diff-scale check of the spec-driven plugin's sync contract
 (`plugins/spec-driven/skills/spec/references/sync-contract.md`): a spec is the acceptance-test set
-for one small release plus a scope fence, and a PR that builds outside the fence is scope creep even
+for one small release plus a scope fence. A PR that builds outside the fence is scope creep even
 when every function in it is pure and every scenario well-formed.
 
-### Step 1 — Find the spec
+### Step 1: Find the Spec
 
 Read the PR body for a line `Spec: NNN` or a link to `docs/specs/NNN-*.md`.
 
 | Situation | Verdict |
 |---|---|
-| `docs/specs/` does not exist in the repository | **NOT APPLICABLE** — say so and stop |
-| `docs/specs/` exists, the PR names no spec | **UNSPECIFIED** — a finding; the PR builds under no fence |
+| `docs/specs/` does not exist in the repository | **NOT APPLICABLE**: say so and stop |
+| `docs/specs/` exists, the PR names no spec | **UNSPECIFIED**: a finding; the PR builds under no fence |
 | The named spec does not exist | **UNSPECIFIED** |
-| The named spec is `draft` or `withdrawn`/`superseded` | **UNAUTHORISED** — production code may not be written from an unconfirmed or dead spec |
+| The named spec is `draft` or `withdrawn`/`superseded` | **UNAUTHORISED**: production code may not be written from an unconfirmed or dead spec |
 | The named spec is `confirmed` or `building` | proceed |
 | The named spec is `shipped` or `reconciled` and the diff changes behaviour | **UNAUTHORISED** unless the PR's own Reconciliation/Amendments row explains it |
 
 A docs-only PR (the spec itself, ADRs, a review record) needs no spec; say so.
 
-### Step 2 — Scenarios in the diff versus scenarios in the spec
+### Step 2: Scenarios in the Diff Versus Scenarios in the Spec
 
 List every `Scenario:` / `Scenario Outline:` added or changed in the diff's feature files. For each:
 
@@ -496,22 +496,22 @@ List every `Scenario:` / `Scenario Outline:` added or changed in the diff's feat
   (before the RED test) or defer; a scenario "added while I was there" is neither.
 
 Then run the mirror in the other direction on the PR head: every scenario the spec authorises for the
-feature files it names must exist in them (the spec's `Status` decides whether that is required yet —
+feature files it names must exist in them (the spec's `Status` decides whether that is required yet:
 `building` and later). If the project carries `tests/test_specs_are_in_sync.py`, run it; otherwise
 run the reference guard from the spec-driven plugin. Its output is the evidence.
 
-### Step 3 — Production changes versus the fence
+### Step 3: Production Changes Versus the Fence
 
 For every changed production function (from Analysis 3's list), name the authorised scenario it
-serves. A function, module, configuration knob, adapter, cache, retry or abstraction that no
-authorised scenario exercises is **OUTSIDE THE FENCE** — and if the spec's *Out* list names it, cite
+serves. A function, module, configuration knob, adapter, cache, retry, or abstraction that no
+authorised scenario exercises is **OUTSIDE THE FENCE**; if the spec's *Out* list names it, cite
 the entry. Refactor-only changes (Analysis 1's structural edits with no behaviour change) are
 exempt, as are the guard tests themselves.
 
-### Step 4 — Lifecycle hygiene
+### Step 4: Lifecycle Hygiene
 
 - A PR whose diff turns the last authorised scenario green should move the spec to `shipped`; if it
-  does not, note it (not a failure — a reminder).
+  does not, note it (a reminder, not a failure).
 - A PR that changes a scenario in a `shipped`/`reconciled` spec without a Reconciliation entry is a
   silent amendment.
 
@@ -661,7 +661,7 @@ This skill is the validation layer for the xp-clean-code skill. The relationship
 | Idempotency scenario for every state transition | Check for the double-application scenario in the test suite |
 | Refactor as a separate phase | Verify that the diff does not mix behaviour changes with structural changes |
 | One step at a time | Flag PRs that touch more than one scenario in a single commit |
-| A test that never fails proves nothing | Remove each protection and prove its test fails — for every claim the PR body makes |
+| A test that never fails proves nothing | Remove each protection and prove its test fails, for every claim the PR body makes |
 
 And with the **spec-driven** plugin, whose `spec` skill fences each small release:
 

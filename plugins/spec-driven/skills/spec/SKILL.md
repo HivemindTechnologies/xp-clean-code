@@ -13,25 +13,25 @@ description: >-
   the PR is checked against the spec).
 ---
 
-# Spec · One small release, fenced and executable
+# Spec · One Small Release, Fenced and Executable
 
 A spec is **the acceptance-test set for one small release, plus a scope fence.** It is not a
 requirements document, not a design document, and not a task list. Upstream documents
 (`DESIGN.md`, `ROADMAP.md`, ADRs) supply intent; the spec is where intent becomes an authorised
 set of scenarios, and the scenarios are what the code is built to. Scope creep is forbidden,
-YAGNI is the default, and design is evolutionary: a type, a module or an abstraction exists
+YAGNI is the default, and design is evolutionary: a type, a module, or an abstraction exists
 only because a scenario in a confirmed spec demanded it.
 
 Read `references/sync-contract.md` before using this skill. It defines the lifecycle, the
-scope-creep rule and the spec ⇄ feature-file mirror that this skill enforces. The template is
+scope-creep rule, and the spec ⇄ feature-file mirror that this skill enforces. The template is
 `references/spec-template.md`; the mirror guard is `references/spec-sync-guard.py`.
 
 The rules here are non-negotiable defaults. Deviate only when the customer explicitly asks and
-states a reason — and record the reason in the spec's Amendments.
+states a reason; record the reason in the spec's Amendments.
 
 ---
 
-## When a spec is the right size
+## When a Spec Is the Right Size
 
 A spec covers **one small release**: something the customer can observe working when it ships,
 typically 3–12 scenarios and one to three roadmap iterations. Two tests:
@@ -41,39 +41,39 @@ typically 3–12 scenarios and one to three roadmap iterations. Two tests:
   features are unrelated increments.
 
 Too small is also a defect: one scenario is an iteration, not a release, and belongs in the
-roadmap under an existing spec. Too large hides feedback exactly the way a large step does.
+roadmap under an existing spec. Too large hides feedback the way a large step does.
 
 ---
 
 ## Procedure
 
-### Step 1 — Draft
+### Step 1: Draft
 
 1. Take the story or roadmap iteration(s) the customer named. Read the brief's hypothesis it
    serves and the ADRs it relies on. If an ADR it needs is still `proposed`, stop: the spec
    cannot reach `confirmed` until the decision is accepted (see the scaffolding skill).
 2. Create `docs/specs/NNN-<slug>.md` from the template with `Status: draft`.
-3. Write **§1 Purpose** as one paragraph and **§2 Scope fence** with an explicit *Out* list.
-   Write the *Out* list before the scenarios — it is easier to see what you are excluding
+3. Write **§1 Purpose** as one paragraph and **§2 Scope Fence** with an explicit *Out* list.
+   Write the *Out* list before the scenarios: it is easier to see what you are excluding
    before the scenarios make the inclusions feel complete.
 4. Write **§3 Scenarios** in Gherkin, inside the spec. For every behaviour: a happy path, one
    scenario per distinct failure mode, boundary values, and a double-application scenario for
    every state transition. Apply the xp-clean-code scenario standard: one `When`, a verifiable
    `Then`, explicit `Given`, no implementation detail.
-5. Write **§4 Design notes** with only what the scenarios force, and an *Explicitly not designed
-   here* line. Write **§5 Exit evidence**.
+5. Write **§4 Design Notes** with only what the scenarios force, and an *Explicitly not designed
+   here* line. Write **§5 Exit Evidence**.
 6. If a scenario cannot be written, the behaviour is not understood. Stop and ask the customer;
    do not write a vague `Then` to keep moving.
 
-### Step 2 — Confirm
+### Step 2: Confirm
 
-Present the spec to the customer in full — purpose, fence, scenarios, exit evidence. The
+Present the spec to the customer in full: purpose, fence, scenarios, exit evidence. The
 customer confirms or edits. Only the customer moves `Status` to `confirmed`. Record who
 confirmed and when in the header or the Amendments table.
 
-Nothing in `tests/`, `src/` or the equivalent may change while the spec is `draft`.
+Nothing in `tests/`, `src/`, or the equivalent may change while the spec is `draft`.
 
-### Step 3 — Open the build
+### Step 3: Open the Build
 
 The first commit of the build:
 
@@ -90,17 +90,17 @@ The first commit of the build:
 From this commit on the **feature file is authoritative** and the spec's Gherkin block is a
 mirror. The guard keeps them equal.
 
-### Step 4 — Build, one scenario at a time
+### Step 4: Build, One Scenario at a Time
 
 For each scenario, in the roadmap's order, run the xp-clean-code loop exactly: RED (verify the
 test fails) → GREEN (minimum code) → CLEAN (refactor, separate commit) → commit. One scenario =
 one commit, `≤ ~50` production lines per step, `mypy --strict` / the stack's type checker green.
 
-Introduce a type, module or abstraction **only when the current scenario's GREEN step needs it**.
+Introduce a type, module, or abstraction **only when the current scenario's GREEN step needs it**.
 The design notes' *Explicitly not designed here* list is checked, not aspirational: if you find
 yourself writing one of those things, stop.
 
-### Step 5 — The scope-creep rule
+### Step 5: The Scope-Creep Rule
 
 A behaviour discovered during the build that no scenario in the spec authorises **stops the
 work**. Exactly two moves are permitted:
@@ -115,14 +115,14 @@ helper "we'll need later", a configuration knob no scenario reads, a second adap
 retry, a broader error type than the scenario's failure mode requires, or a scenario added to
 the feature file "while I was there".
 
-### Step 6 — Ship
+### Step 6: Ship
 
 When every authorised scenario is green on the default branch, set `Status: shipped`. Check the
 **exit evidence** (§5) and record what was observed. If the evidence cannot be gathered yet
 (e.g. it needs live data), say so in §5 with the date it is expected; do not mark the spec
 `reconciled` on tests alone when §5 asked for more.
 
-### Step 7 — Reconcile
+### Step 7: Reconcile
 
 Fill **§7 Reconciliation** with every as-built deviation from the confirmed spec: renamed terms,
 scenarios amended, design notes that turned out wrong, a fence moved. "None" is allowed and
@@ -131,7 +131,7 @@ in the operative doc with the terms that were actually built, and tick the roadm
 
 ---
 
-## Hard rules
+## Hard Rules
 
 - **The spec's scenarios are the only licence to write production code.** `DESIGN.md`
   describing a component is scope, not licence; the roadmap listing an iteration is order, not
@@ -141,14 +141,14 @@ in the operative doc with the terms that were actually built, and tick the roadm
 - **The customer confirms; the agent proposes.** The agent never moves a spec to `confirmed`.
 - **One spec, one PR series.** The PR body names the spec (`Spec: NNN`) so pr-validation
   Analysis 5 can check the diff against it.
-- **The mirror is maintained by the guard, not by memory.** If the guard fails, copy in the
+- **The guard maintains the mirror, not memory.** If the guard fails, copy in the
   direction the state dictates and record why the behaviour moved.
 - **A spec is never edited to match code silently.** A change to §3 after `confirmed` is an
   Amendments row; a change after `shipped` is a Reconciliation entry.
 
 ---
 
-## What this skill refuses
+## What This Skill Refuses
 
 - To write production code from a `draft` or unconfirmed spec.
 - To write a scenario with a `Then` that cannot be asserted ("handles errors gracefully").
@@ -158,7 +158,7 @@ in the operative doc with the terms that were actually built, and tick the roadm
 
 ---
 
-## Interaction with the other skills
+## Interaction with the Other Skills
 
 | Skill | Hands this skill | Receives from this skill |
 |---|---|---|
@@ -170,7 +170,7 @@ in the operative doc with the terms that were actually built, and tick the roadm
 
 ---
 
-## Quick reference
+## Quick Reference
 
 ```
 Before Status: confirmed

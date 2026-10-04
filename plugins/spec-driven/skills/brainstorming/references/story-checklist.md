@@ -16,7 +16,7 @@
 A hypothesis earns its row in the brief when all four hold:
 
 1. **It can be false.** Write the falsifier first. If nothing observable would refute it, it is a
-   value statement; move it to *Non-goals* or *Constraints*.
+   value statement; move it to *Non-Goals* or *Constraints*.
 2. **The evidence has a source.** A log, a measurement on real data, a user's action, a
    published series. "We'll know" is not a source.
 3. **A story or a spike tests it.** A hypothesis nothing tests will be believed by default,

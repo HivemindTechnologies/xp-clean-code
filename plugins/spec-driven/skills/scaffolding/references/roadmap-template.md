@@ -1,9 +1,9 @@
-# Roadmap template (`docs/ROADMAP.md`)
+# Roadmap Template (`docs/ROADMAP.md`)
 
 The roadmap is the **build sequence**, and it exists to enforce the XP disciplines against a
 brief that deliberately runs ahead of the code: one iteration = one scenario (or a tiny
-cluster), driven RED → GREEN → CLEAN, landed as one commit. It orders; it does not authorise —
-only a confirmed spec does that.
+cluster), driven RED → GREEN → CLEAN, landed as one commit. It orders; it does not authorise.
+Only a confirmed spec does that.
 
 ```markdown
 # <Product> — Roadmap
@@ -19,7 +19,7 @@ Status legend: ⏳ not started · 🔨 building (spec NNN) · ✅ shipped · ↩
 
 ---
 
-## Milestone M0 — Walking skeleton
+## Milestone M0 — Walking Skeleton
 
 **Exit gate:** CI green on the default branch running one trivial test and one trivial
 `.feature`; the type checker in strict mode; the sync guard installed. Nothing else.
@@ -45,14 +45,14 @@ Status legend: ⏳ not started · 🔨 building (spec NNN) · ✅ shipped · ↩
 
 ## Milestone M2 — <next small release>
 
-*(gated on M1's exit gate — do not scaffold ahead of it)*
+*(gated on M1's exit gate: do not scaffold ahead of it)*
 
 | # | Scenario | Introduces | Spec | Status |
 |---|----------|------------|------|--------|
 
 ---
 
-## Backlog (deferred from specs)
+## Backlog (Deferred from Specs)
 
 One line each: the scenario, the spec that deferred it, the date. This is where the spec skill's
 "defer" move writes.
@@ -62,17 +62,17 @@ One line each: the scenario, the spec that deferred it, the date. This is where 
 
 ---
 
-## Invariants that hold across every iteration
+## Invariants That Hold Across Every Iteration
 
 - One failing test at a time; ≤ ~50 production lines per step; one scenario = one commit.
 - The type checker and every scenario green before *and* after every refactor.
 - Never a refactor and a feature in the same commit.
-- No component built before its iteration, and no iteration built outside a confirmed spec —
+- No component built before its iteration, and no iteration built outside a confirmed spec;
   future design is scope, not licence.
 - A type is introduced by the first scenario that consumes it, never ahead of a consumer.
 ```
 
-## Rules for filling it
+## Rules for Filling It
 
 - **Milestones are small releases.** Each has an exit gate stated as *evidence the customer
   reads*, never as a list of components. "`RiskAgent` built" is implementation; "40 proposals

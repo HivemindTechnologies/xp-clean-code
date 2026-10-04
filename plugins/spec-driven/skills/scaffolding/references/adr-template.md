@@ -1,4 +1,4 @@
-# Architecture decision records (Nygard shape)
+# Architecture Decision Records (Nygard Shape)
 
 An ADR records **one decision that shapes every signature** or determines the correctness of a
 core number: a sign convention, a day-count basis, a monetary type, an error-handling style, a
@@ -25,10 +25,10 @@ so the history of the decision survives. Status moves in one direction:
 What is true that makes this decision necessary. The forces in play, including the ones that
 pull the other way. Two to six sentences; measurements where they exist.
 
-## Options considered
+## Options Considered
 
-- **(A)** … — what it buys, what it costs
-- **(B)** … — what it buys, what it costs
+- **(A)** …: what it buys, what it costs
+- **(B)** …: what it buys, what it costs
 
 ## Decision
 
@@ -42,7 +42,7 @@ detect the decision being violated or silently changed (e.g. a sign-sensitivity 
 docs-current guard on the constant's value).
 ```
 
-## File: `docs/decisions/README.md` — the index and the pin gate
+## File: `docs/decisions/README.md` — The Index and the Pin Gate
 
 ```markdown
 # Decisions
@@ -53,7 +53,7 @@ docs-current guard on the constant's value).
 | 0002 | Day count is ACT/365-fixed, isolated in one function | accepted | 2 | calibration shows trading-time fits better |
 | 0003 | … | proposed | 2 | |
 
-## Pin gate
+## Pin Gate
 
 Iteration N may not open while any ADR that blocks it is still `proposed`. The scaffolding skill
 writes this table; the spec skill reads it before moving a spec to `confirmed`.

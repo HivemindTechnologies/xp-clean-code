@@ -17,7 +17,7 @@ The rules here are non-negotiable defaults. Deviate only when the user explicitl
 
 ## The Principles
 
-### 1. Test First — Always
+### 1. Test First, Always
 
 Never write production code without a failing test that demands it.
 
@@ -31,10 +31,10 @@ CLEAN → refactor to remove duplication and improve clarity
 Each phase is complete before the next begins. Mixing them is the primary source of over-engineered, hard-to-test code.
 
 **Enforcement rules:**
-- If asked to implement something, write the test first. If the user hasn't provided a spec, derive one and confirm it before writing any test.
-- "Minimum code to go green" means exactly that. No helper methods, no abstractions, no configuration that the test doesn't exercise.
+- If asked to implement something, write the test first. If the user has not provided a spec, derive one and confirm it before writing any test.
+- "Minimum code to go green" means exactly that. No helper methods, no abstractions, no configuration that the test does not exercise.
 - A test that never fails proves nothing. Always verify the test fails before making it pass.
-- This applies with full force to guards. When the code you are adding is a check — a validation, an authorisation test, a retry limit, an idempotency key — the test that demands it must fail when the guard is removed. If you cannot make it fail, the guard is untested or unreachable, and you do not yet get to claim it protects anything. The pr-validation skill enforces this on the way out; enforce it on the way in.
+- This applies with full force to guards. When the code you are adding is a check (a validation, an authorisation test, a retry limit, an idempotency key), the test that demands it must fail when the guard is removed. If you cannot make it fail, the guard is untested or unreachable, and you do not yet get to claim it protects anything. The pr-validation skill enforces this on the way out; enforce it on the way in.
 
 ---
 
@@ -50,13 +50,13 @@ Then   [an observable outcome results]
 
 **Why this format:**
 - *Given* makes implicit preconditions explicit, preventing silent assumptions.
-- *When* defines the single trigger — if you need two Whens, you have two scenarios.
+- *When* defines the single trigger: if you need two Whens, you have two scenarios.
 - *Then* is a verifiable assertion, not a vague goal.
 
-**Example — bad spec:**
+**Example (bad spec):**
 > "The payment service should handle errors gracefully."
 
-**Example — good scenarios:**
+**Example (good scenarios):**
 ```
 Given a payment request with an expired card
 When the payment is submitted
@@ -75,7 +75,7 @@ Scenarios replace free-form success criteria. They are the contract between inte
 - Write scenarios before writing tests. Tests are the executable form of scenarios.
 - One scenario = one test (or one parameterised case). Never bundle multiple Whens.
 - If you cannot write a scenario for it, you do not understand it well enough to build it. Stop and clarify.
-- The `And` keyword extends a Given or Then — use it; don't cram multiple conditions into one line.
+- The `And` keyword extends a Given or Then. Use it; do not cram multiple conditions into one line.
 
 ---
 
@@ -93,7 +93,7 @@ Work in the smallest possible increments. Each step must be independently verifi
 
 **Hard limits:**
 - Never have more than one failing test at a time.
-- Never implement ahead of a test — no "I'll need this later" code.
+- Never implement ahead of a test: no "I'll need this later" code.
 - Never tackle a scenario whose prerequisites are not already green.
 - If a change touches more than ~50 lines of production code, the step is too large. Split the scenario.
 
@@ -103,9 +103,9 @@ Work in the smallest possible increments. Each step must be independently verifi
 
 ### 4. Clean Code Invariants
 
-Code is read far more often than it is written. These rules are not style preferences — they are constraints on long-term maintainability.
+Code is read far more often than it is written. These rules are not style preferences; they are constraints on long-term maintainability.
 
-#### Names reveal intent
+#### Names Reveal Intent
 ```java
 // Bad
 int d;
@@ -120,7 +120,7 @@ List<Cell> flaggedCells;
 - Boolean names read as questions: `isExpired`, `hasPermission`, `canRetry`.
 - Method names are verbs: `calculateTotal`, `sendNotification`, `parseConfig`.
 
-#### Functions do one thing
+#### Functions Do One Thing
 A function does one thing if you cannot meaningfully extract a sub-function from it with a name that is not a restatement of its implementation. If you need "and" to describe what a function does, split it.
 
 ```python
@@ -133,7 +133,7 @@ def validate(user): ...
 def save(user): ...
 ```
 
-#### Comments explain *why*, not *what*
+#### Comments Explain *Why*, Not *What*
 Code describes what it does. Comments explain why a non-obvious decision was made.
 
 ```java
@@ -148,10 +148,10 @@ i++;
 
 Delete commented-out code. Use version control for history.
 
-#### No surprise side effects
+#### No Surprise Side Effects
 A function that queries should not modify state. A function named `getX()` should not write to a database, send a network request, or mutate a shared object. Side effects must be obvious from the name and signature.
 
-#### Keep it small
+#### Keep It Small
 - Functions: fits comfortably on one screen (~20 lines is a strong signal to reconsider).
 - Classes: one responsibility, one reason to change.
 - Files: cohesive. If you need to scroll past unrelated concepts, the file is too large.
@@ -165,18 +165,18 @@ Refactoring is the act of improving the structure of code **without changing its
 **The refactor contract:**
 - All tests must be green before refactoring begins.
 - All tests must still be green when refactoring ends.
-- No new functionality is introduced during a refactor. If you discover needed behaviour, stop, write a scenario, and come back.
+- Introduce no new behaviour during a refactor. If you discover needed behaviour, stop, write a scenario, and come back.
 - Refactor in the smallest safe steps: rename → extract → move → inline. Run the tests after each step.
 
 **Common refactor triggers (not excuses to skip green):**
 - Duplication: if two code paths look alike, extract the common concept.
-- Primitive obsession: if you're passing five related primitives, introduce a value object.
+- Primitive obsession: if you are passing five related primitives, introduce a value object.
 - Long method: extract until each chunk has a clear name.
 - Unclear name: rename relentlessly until the code reads like intent.
 
 **What refactoring is NOT:**
-- Rewriting a working module because you'd do it differently.
-- Cleaning up code you didn't write as part of your current change (see Karpathy: surgical changes).
+- Rewriting a working module because you would do it differently.
+- Cleaning up code you did not write as part of your current change (see Karpathy: surgical changes).
 - Doing a refactor and a feature in the same commit.
 
 ---
@@ -185,8 +185,8 @@ Refactoring is the act of improving the structure of code **without changing its
 
 The domain model is the core of the software. Code structure must reflect domain structure, not technical infrastructure.
 
-#### Ubiquitous language
-Every concept that matters to a domain expert has one precise name, used consistently in code, tests, scenarios, and conversation. When the domain expert says "shipment", the code says `Shipment` — not `DeliveryRecord`, `ShipmentDTO`, or `OrderItem`. Divergence between spoken language and code is a defect.
+#### Ubiquitous Language
+Every concept that matters to a domain expert has one precise name, used consistently in code, tests, scenarios, and conversation. When the domain expert says "shipment", the code says `Shipment`, not `DeliveryRecord`, `ShipmentDTO`, or `OrderItem`. Divergence between spoken language and code is a defect.
 
 ```python
 # Bad — vocabulary diverged from the domain
@@ -200,8 +200,8 @@ class Shipment:
     delivery_address: Address
 ```
 
-#### Value objects over primitives
-Replace primitive obsession with value objects. A value object has no identity — two instances with the same data are equal. Value objects are immutable by definition, eliminating an entire class of mutation bugs and making the domain contract explicit in the type signature.
+#### Value Objects over Primitives
+Replace primitive obsession with value objects. A value object has no identity: two instances with the same data are equal. Value objects are immutable by definition, eliminating an entire class of mutation bugs and making the domain contract explicit in the type signature.
 
 ```scala
 // Bad — stringly typed, no contract
@@ -219,20 +219,20 @@ fn charge(card_number: String, currency: String, amount: f64) -> bool;
 fn charge(card: CardNumber, amount: Money) -> Result<Receipt, ChargeError>;
 ```
 
-#### Entities have identity, not structural equality
+#### Entities Have Identity, Not Structural Equality
 An `Order` is the same order whether its status is `PENDING` or `CONFIRMED`. Model identity explicitly. Never compare entities by field value.
 
-#### Aggregates enforce consistency boundaries
+#### Aggregates Enforce Consistency Boundaries
 Only the aggregate root is reachable from outside the aggregate. Invariants that span multiple objects belong in the aggregate, not in a service. If a service is enforcing an invariant, it belongs inside an aggregate.
 
-#### Domain events make state transitions explicit
+#### Domain Events Make State Transitions Explicit
 Rather than mutating state silently, emit a typed, immutable event for every significant transition:
 ```
 OrderPlaced  PaymentConfirmed  ShipmentDispatched  OrderCancelled
 ```
 Events are value objects. They are the auditable history of the domain and the natural integration point between bounded contexts.
 
-#### Bounded contexts prevent model leakage
+#### Bounded Contexts Prevent Model Leakage
 A `Customer` in the billing context is not the same type as a `Customer` in the shipping context. Expect name collisions across contexts; resolve them with anti-corruption layers, never by sharing a single model across boundaries.
 
 ---
@@ -241,8 +241,8 @@ A `Customer` in the billing context is not the same type as a `Customer` in the 
 
 Prefer pure functions everywhere the language and domain allow. Push side effects to the boundary and make them explicit in the type system.
 
-#### Referential transparency
-A function is referentially transparent if any call to it can be replaced with its return value without changing the program's behaviour. This is the strongest correctness guarantee a function can provide — it is trivially testable, freely composable, and safe to retry.
+#### Referential Transparency
+A function is referentially transparent if any call to it can be replaced with its return value without changing the program's behaviour. This is the strongest correctness guarantee a function can provide: it is trivially testable, freely composable, and safe to retry.
 
 ```scala
 // Not referentially transparent — depends on hidden external state
@@ -253,10 +253,10 @@ def applyDiscount(price: Money, discount: Discount): Money =
   price * (1 - discount.rate)
 ```
 
-#### Immutability by default
+#### Immutability by Default
 Never mutate data. Produce new values through transformations. Use `val`, frozen dataclasses, records, or persistent data structures by default. Mutation is the exception and must be justified.
 
-#### Side effects at the boundary
+#### Side Effects at the Boundary
 Pure domain logic must not reach out to databases, clocks, random number generators, or network services. Pass what is needed as an argument; return what changed as a value. I/O belongs at the outermost layer.
 
 ```python
@@ -289,7 +289,7 @@ Scenario: Confirming an already-confirmed order is a no-op
    And no duplicate ConfirmationEvent is emitted
 ```
 
-#### Function composition over mutation
+#### Function Composition over Mutation
 Chain pure transformations rather than accumulating mutations on a shared variable. Prefer pipelines.
 
 ```scala
@@ -306,7 +306,7 @@ val result = applyLoyaltyPoints(addTax(applyDiscount(order)))
 val result = order |> applyDiscount |> addTax |> applyLoyaltyPoints
 ```
 
-#### Monadic types for explicit effects
+#### Monadic Types for Explicit Effects
 When a computation may fail, be absent, or involve I/O, encode that in the return type. Never use `null`, unchecked exceptions, or hidden I/O as substitutes for an honest type signature.
 
 | Effect | Preferred type |
@@ -316,7 +316,7 @@ When a computation may fail, be absent, or involve I/O, encode that in the retur
 | Async / I/O | `IO[A]` / `Future[A]` / `Task<A>` |
 | Multiple validation errors | `Validated[Errors, A]` |
 
-Compose effects with `map`, `flatMap` / `bind`, and `fold`. Never unwrap a monadic type inside domain logic — propagate it to the caller.
+Compose effects with `map`, `flatMap` / `bind`, and `fold`. Never unwrap a monadic type inside domain logic; propagate it to the caller.
 
 ```scala
 // for-comprehension sequences effects; any Left short-circuits the chain
@@ -340,11 +340,11 @@ fn process_payment(order: &Order, card: CardNumber) -> Result<Receipt, PaymentEr
 }
 ```
 
-#### Rust: newtypes, ownership, and honest signatures
+#### Rust: Newtypes, Ownership, and Honest Signatures
 
-Rust gives you most of this discipline mechanically — but only if you use the type system rather than working around it.
+Rust gives you most of this discipline mechanically, but only if you use the type system rather than working around it.
 
-**Newtypes with smart constructors.** A tuple struct with a private field is the value object: the only way to obtain one is through a constructor that enforces the invariant, so every downstream function can trust it.
+**Newtypes with smart constructors.** A tuple struct with a private field is the value object. The only way to obtain one is through a constructor that enforces the invariant, so every downstream function can trust it.
 
 ```rust
 // Bad — validation must be repeated at every call site
@@ -367,7 +367,7 @@ impl Email {
 }
 ```
 
-Derive `PartialEq`/`Eq` for value objects — structural equality *is* the definition. Entities get identity instead: implement `PartialEq` on the id field alone, or don't derive it at all.
+Derive `PartialEq`/`Eq` for value objects: structural equality *is* the definition. Entities get identity instead: implement `PartialEq` on the id field alone, or do not derive it at all.
 
 **Transformations return new values.** Take `self` and return `Self`; reach for `&mut self` only when profiling or an external API demands it.
 
@@ -399,7 +399,7 @@ pub enum PaymentError {
 }
 ```
 
-Use `anyhow::Error` only in binaries and at the outermost shell — never as a domain function's error type, because it erases exactly the information the caller needs to decide what to do.
+Use `anyhow::Error` only in binaries and at the outermost shell. Never make it a domain function's error type: it erases exactly the information the caller needs to decide what to do.
 
 **Banned in domain code:**
 
@@ -408,10 +408,10 @@ Use `anyhow::Error` only in binaries and at the outermost shell — never as a d
 | `unwrap()`, `expect()` | Turns a typed failure into a crash | Propagate with `?` |
 | `panic!`, `todo!` on a reachable path | Unchecked control flow | Return `Err` |
 | `RefCell`, `Mutex`, `OnceCell`, `static mut` | Hidden mutable state; breaks referential transparency | Pass state in, return it out |
-| `SystemTime::now()`, `rand::random()`, `env::var` | Ambient input — the function is no longer a function of its arguments | Inject a `Clock` / `Rng` / config trait |
+| `SystemTime::now()`, `rand::random()`, `env::var` | Ambient input: the function is no longer a function of its arguments | Inject a `Clock` / `Rng` / config trait |
 | `unsafe` | Escapes every guarantee above | Nothing, in domain logic |
 
-`expect()` is acceptable in tests, in `main`, and in `#[cfg(test)]` fixtures — those are the shell.
+`expect()` is acceptable in tests, in `main`, and in `#[cfg(test)]` fixtures; those are the shell.
 
 **Iterator pipelines over mutable accumulation.** This is Principle 7's function composition in Rust's idiom.
 
@@ -432,7 +432,7 @@ let total: Money = order
     .sum();
 ```
 
-**Enforce it in CI.** Types alone don't stop `unwrap()`; lints do.
+**Enforce it in CI.** Types alone do not stop `unwrap()`; lints do.
 
 ```toml
 # Cargo.toml — deny at the crate level, allow deliberately and locally
@@ -444,9 +444,9 @@ panic         = "deny"
 
 Run `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` in CI. An `#[allow(...)]` is a decision that needs a `// why:` comment next to it, exactly like any other deviation from these defaults.
 
-#### Declarative types in dynamically typed languages
+#### Declarative Types in Dynamically Typed Languages
 
-Type annotations in Python and similar languages are not enforced at runtime, but they are a first-class requirement. They are the machine-readable contract of every function — enabling static analysis, IDE support, and early error detection via mypy or pyright. An unannotated function is a build failure, not a style issue. Run `mypy --strict` or `pyright` in CI.
+Type annotations in Python and similar languages are not enforced at runtime, but they are a first-class requirement. They are the machine-readable contract of every function, enabling static analysis, IDE support, and early error detection via mypy or pyright. An unannotated function is a build failure, not a style issue. Run `mypy --strict` or `pyright` in CI.
 
 **Every function signature must be fully annotated:**
 
@@ -460,7 +460,7 @@ def calculate_discount(customer: Customer, order_total: Money) -> Discount:
     ...
 ```
 
-**Use `NewType` for domain identifiers — never raw primitives:**
+**Use `NewType` for domain identifiers, never raw primitives:**
 
 ```python
 from typing import NewType
@@ -514,9 +514,9 @@ def find_customer(customer_id: CustomerId) -> Optional[Customer]:
 
 ### 8. Total Types and Explicit Outcomes
 
-Principle 7 requires that absence, failure, and I/O appear in the return type. This principle governs **which** type to reach for, and how callers must eliminate it. `Option`, `Either`, a sealed ADT, and an exception are not interchangeable — choosing the wrong one destroys information the caller needs.
+Principle 7 requires that absence, failure, and I/O appear in the return type. This principle governs **which** type to reach for, and how callers must eliminate it. `Option`, `Either`, a sealed ADT, and an exception are not interchangeable; choosing the wrong one destroys information the caller needs.
 
-#### Choose by what the caller needs to know
+#### Choose by What the Caller Needs to Know
 
 | Situation | Model |
 |---|---|
@@ -552,11 +552,11 @@ def to_nomination(item: Any) -> Result[Nomination, NominationError]:
 
 An `Option` that hides a failure is worse than an exception: an exception at least carries a message and a stack.
 
-#### Null is not a domain type
+#### Null Is Not a Domain Type
 
 > No domain value inside the typed core may be `null`, `None`, or `undefined`.
 
-Nullable values are permitted only in explicitly named **boundary representations** — database rows, JSON and HTTP payloads, framework callbacks, legacy APIs, deserialisation DTOs, foreign library interfaces. Every boundary translates them immediately into a mandatory value, an `Option`, an `Either`, or a domain ADT. The rule is not "check for null"; it is **normalise at the boundary so null cannot travel**.
+Nullable values are permitted only in explicitly named **boundary representations**: database rows, JSON and HTTP payloads, framework callbacks, legacy APIs, deserialisation DTOs, foreign library interfaces. Every boundary translates them immediately into a mandatory value, an `Option`, an `Either`, or a domain ADT. The rule is not "check for null"; it is **normalise at the boundary so null cannot travel**.
 
 ```typescript
 type CustomerRow = { display_name: string | null };      // boundary representation
@@ -572,9 +572,9 @@ function toCustomerName(value: string | null): CustomerName {
 
 A row DTO and a domain type that happen to share a shape are still two types. When persistence nullability reaches domain code, the boundary is missing.
 
-#### Dependent optionals become sum types
+#### Dependent Optionals Become Sum Types
 
-An optional field often hides several states. Optionals that are independent are fine; optionals whose validity depends on each other, or on a status field, are a modelling defect — they admit combinations that cannot occur.
+An optional field often hides several states. Optionals that are independent are fine; optionals whose validity depends on each other, or on a status field, are a modelling defect: they admit combinations that cannot occur.
 
 ```typescript
 // Bad — permits contradictory states: processing with a receipt, succeeded with a failure reason
@@ -599,13 +599,13 @@ type Payment =
 
 That last one is the sharpest signal. "Absent because there was nothing to measure" and "absent because the computation failed" are different facts, and a caller deciding whether to act on the value needs to know which it has.
 
-These are screens, not verdicts. Several guards often serve a single cause — three checks that all mean "there is no usable input" are one absence, and splitting them yields variants nobody branches on. Before splitting anything, apply the deciding test: **would a caller act differently, report differently, or need a different scenario depending on which case it received?** If not, one `Option` is correct and the reason belongs in a comment.
+These are screens, not verdicts. Several guards often serve a single cause: three checks that all mean "there is no usable input" are one absence, and splitting them yields variants nobody branches on. Before splitting anything, apply the deciding test: **would a caller act differently, report differently, or need a different scenario depending on which case it received?** If not, one `Option` is correct and the reason belongs in a comment.
 
-#### Eliminate exhaustively
+#### Eliminate Exhaustively
 
 Introducing the type is half the work; callers must consume it without escape hatches.
 
-- Match exhaustively. No default branch on a closed domain ADT — a default silences the compiler check that a new variant would otherwise trip.
+- Match exhaustively. No default branch on a closed domain ADT; a default silences the compiler check that a new variant would otherwise trip.
 - No forced unwrap, no unchecked cast, no null assertion: `get()`, `.value`, `!`, `!!`, `as T`, `unwrap()`.
 - No arbitrary fallback substituted for a missing value. A default is a domain decision and needs a scenario.
 
@@ -631,7 +631,7 @@ receipt_line = payment_result.fold(
 
 `fold` is the better fit for two-case types like `Result`, and the natural one in languages without exhaustive pattern matching. Both are acceptable; an `isinstance` ladder with no final `assert_never` is not.
 
-#### Exceptions still have a place
+#### Exceptions Still Have a Place
 
 A blanket "never throw" rule is counterproductive and pushes people to smuggle defects through `Option`.
 
@@ -645,7 +645,7 @@ A blanket "never throw" rule is counterproductive and pushes people to smuggle d
 
 > `Either` represents an outcome **in** the function's contract. An exception represents a failure to fulfil or execute that contract.
 
-So a value object rejecting an impossible value in its constructor should raise — the caller passed something that cannot exist, which is a defect, not an outcome. At infrastructure boundaries, catch the vendor's exceptions and translate them into a small typed vocabulary; never let `SQLException`, `AxiosError`, or a bare `requests` exception reach domain code.
+So a value object rejecting an impossible value in its constructor should raise: the caller passed something that cannot exist, which is a defect, not an outcome. At infrastructure boundaries, catch the vendor's exceptions and translate them into a small typed vocabulary; never let `SQLException`, `AxiosError`, or a bare `requests` exception reach domain code.
 
 ```python
 def load_customer(repo: CustomerRepository, customer_id: CustomerId) -> Result[Customer, CustomerLoadError]:
@@ -656,7 +656,7 @@ def load_customer(repo: CustomerRepository, customer_id: CustomerId) -> Result[C
     return Ok(found) if found is not None else Err(CustomerLoadError.NOT_FOUND)
 ```
 
-#### The review decision tree
+#### The Review Decision Tree
 
 Apply this to every nullable or optional value, in order:
 
@@ -679,7 +679,7 @@ Apply this to every nullable or optional value, in order:
 
 Step 1 first, always: the cheapest optional to eliminate is the one that never needed to exist.
 
-For per-language idioms — boundary normalisation, ADT declaration, exhaustive elimination, and the conformance properties a hand-rolled result type must satisfy — see `references/total-types.md`.
+For per-language idioms (boundary normalisation, ADT declaration, exhaustive elimination, and the conformance properties a hand-rolled result type must satisfy), see `references/total-types.md`.
 
 ---
 
@@ -689,12 +689,12 @@ This skill is additive. When used alongside Karpathy-style behavioural rules:
 
 | Karpathy Principle | Reinforcement |
 |---|---|
-| Clarify before acting | Write the BDD scenario first — it forces shared understanding before any code exists |
-| Minimal footprint | TDD enforces this mechanically — you cannot write code without a test that demands it |
+| Clarify before acting | Write the BDD scenario first; it forces shared understanding before any code exists |
+| Minimal footprint | TDD enforces this mechanically: you cannot write code without a test that demands it |
 | Surgical changes | Refactor-as-separate-phase keeps structural improvements out of feature commits |
 | Goal-driven execution | Given/When/Then *is* the success criterion, made verifiable |
-| Don't assume | Ubiquitous language surfaces hidden assumptions — if the name is wrong, the model is wrong |
-| Avoid hidden state | Pure functions and immutability make all state explicit and traceable — and null is the most common hidden state of all: a type that claims a value exists when it may not |
+| Don't assume | Ubiquitous language surfaces hidden assumptions: if the name is wrong, the model is wrong |
+| Avoid hidden state | Pure functions and immutability make all state explicit and traceable. Null is the most common hidden state of all: a type that claims a value exists when it may not |
 
 ---
 
@@ -730,4 +730,4 @@ Comments:           Why, never what
 
 For language- or framework-specific testing patterns, see `references/testing-patterns.md`.
 For worked examples of BDD scenarios across common problem types, see `references/scenario-examples.md`.
-For per-language total-type idioms — boundary normalisation, ADTs, exhaustive elimination — see `references/total-types.md`.
+For per-language total-type idioms (boundary normalisation, ADTs, exhaustive elimination), see `references/total-types.md`.
