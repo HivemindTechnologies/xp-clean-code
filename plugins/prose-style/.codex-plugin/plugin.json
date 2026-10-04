@@ -1,0 +1,28 @@
+{
+  "name": "prose-style",
+  "version": "1.0.0",
+  "description": "House prose style for AI-written text, with a revise skill that audits and rewrites existing text",
+  "author": {
+    "name": "Hivemind Technologies",
+    "email": "info@hivemindtechnologies.com",
+    "url": "https://hivemindtechnologies.com"
+  },
+  "homepage": "https://github.com/HivemindTechnologies/xp-clean-code#the-prose-style-plugin",
+  "repository": "https://github.com/HivemindTechnologies/xp-clean-code",
+  "license": "MIT",
+  "keywords": ["writing", "prose", "style", "documentation", "editing", "plain-english"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Prose Style",
+    "shortDescription": "Write and revise prose in a clear, calibrated house style",
+    "longDescription": "Apply composition rules from Strunk, Orwell, Pinker, and Gopen and Swan, guard against the habits of machine-written prose, and hold to house conventions while writing documents, commit messages, and pull request descriptions. The revise skill audits existing text rule by rule and rewrites only the passages it flags.",
+    "developerName": "Hivemind Technologies",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "websiteURL": "https://hivemindtechnologies.com",
+    "defaultPrompt": [
+      "Write this documentation in the house prose style.",
+      "Revise this file against the prose-style rules."
+    ]
+  }
+}
