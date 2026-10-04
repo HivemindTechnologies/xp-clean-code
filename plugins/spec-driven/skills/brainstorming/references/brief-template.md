@@ -1,6 +1,6 @@
-# Design brief template (`docs/DESIGN.md`, draft state)
+# Design Brief Template (`docs/DESIGN.md`, Draft State)
 
-The brief is the *why*. It is allowed to run ahead of the code — that is its job — and the
+The brief is the *why*. It is allowed to run ahead of the code (that is its job), and the
 precedence rule keeps it from becoming licence: anything here that is not in a confirmed spec
 is intent, not work. Keep the brief in the domain's language; keep architecture out of it
 until the scaffolding skill adds it.
@@ -10,10 +10,10 @@ until the scaffolding skill adds it.
 
 **Status:** draft — nothing here is confirmed for build. See the precedence rule.
 **Customer:** <the person who decides>
-**Precedence:** for anything being built now, `CLAUDE.md`, the current spec and the accepted
+**Precedence:** for anything being built now, `CLAUDE.md`, the current spec, and the accepted
 ADRs are authoritative; this document is authoritative for intent and future phases.
 
-## 1. The problem
+## 1. The Problem
 
 Who has it, what it costs them today, and why now. Three to six sentences. No solution yet.
 
@@ -27,7 +27,7 @@ observation will come from. A hypothesis that cannot fail is a slogan.
 | H1 | | | | spike S1 / milestone M1 |
 | H2 | | | | |
 
-## 3. Non-goals
+## 3. Non-Goals
 
 What this product will not do, stated so a later reader cannot mistake silence for permission.
 Include the things that are tempting.
@@ -35,7 +35,7 @@ Include the things that are tempting.
 ## 4. Stories
 
 XP user stories, INVEST-shaped: Independent, Negotiable, Valuable, Estimable, Small, Testable.
-A story is a *promise of a conversation*, not a specification — the spec skill will turn one
+A story is a *promise of a conversation*, not a specification; the spec skill will turn one
 into scenarios when its turn comes.
 
 | Id | As a… | I want… | so that… | Done when (one observable outcome) | Tests | Needs spike |
@@ -56,7 +56,7 @@ decision record (ADR) or a scenario. Spike code is never merged.
 |----|----------|----------|-----------|--------|
 | S1 | | 1 day | an ADR proposing X or Y | U1, U3 |
 
-## 6. Ubiquitous language (seed)
+## 6. Ubiquitous Language (Seed)
 
 Ten to twenty terms the domain expert actually uses, one line each. These become type names
 later; here they are just words with agreed meanings.
@@ -70,12 +70,12 @@ later; here they are just words with agreed meanings.
 Only genuine constraints: a regulator, an existing system the product must read from, a
 budget, a deadline, a banned dependency. A preference is not a constraint.
 
-## 8. Open questions
+## 8. Open Questions
 
 Things nobody can answer yet, each with who could answer it and by when.
 ```
 
-## Spike record template (`docs/spikes/YYYY-MM-DD-<slug>.md`)
+## Spike Record Template (`docs/spikes/YYYY-MM-DD-<slug>.md`)
 
 ```markdown
 # Spike S1 · <the question, as a question>
@@ -86,17 +86,17 @@ Things nobody can answer yet, each with who could answer it and by when.
 ## Question
 One sentence.
 
-## What was tried
+## What Was Tried
 Bullets. Enough that nobody repeats it.
 
 ## Finding
 What was learned, with the measurement or the observation that supports it.
 
 ## Output
-- ADR-000N proposed: <title>   — or —
+- ADR-000N proposed: <title>   (or)
 - Scenario added to story U1's sketch: <title>
 - No output: the question was the wrong question, because …
 
-## Not carried forward
+## Not Carried Forward
 The code. State this explicitly so nobody goes looking for it.
 ```
