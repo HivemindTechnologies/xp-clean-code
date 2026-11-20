@@ -27,9 +27,10 @@ When the target is a GitHub pull request, read `references/github-pr-workflow.md
 **Preflight mode.** When you are about to open a pull request (the user asked for one, `/pr-preflight` ran, or the preflight gate hook denied `gh pr create`), the pull request does not exist yet. Read `references/preflight-workflow.md` instead: it takes the diff from the local branch and the title and body from the draft you are about to submit, then asks the user before recording the preflight and opening the pull request.
 
 1. Obtain the diff for the PR (changed files, hunks, line ranges) **and the PR body, title, and commit messages**. Analysis 4 validates the prose against the tests, and Analysis 5 reads the spec the body names.
-2. Identify every changed function, method, or procedure.
-3. Run each of the five analyses below independently.
-4. Produce the structured gap report.
+2. In preflight mode, run the deterministic tools (`scripts/preflight_tools.py`, described in `references/tooling.md`) and keep their findings as evidence for the analyses.
+3. Identify every changed function, method, or procedure.
+4. Run each of the five analyses below independently.
+5. Produce the structured gap report.
 
 Always work from the diff. Do not analyse unchanged code unless a changed function calls it and the call site is relevant to the analysis.
 
@@ -547,7 +548,7 @@ mirror check. NOT APPLICABLE is stated, never implied.
 
 ## Output Format
 
-Produce a structured report with five sections. Use this exact structure:
+Produce a structured report with five sections. Use this exact structure. When the deterministic tools ran, put a **0 · Tooling** section first, with the runner's markdown output and every NOT_RUN or SKIPPED_SLOW check stated with its reason (see `references/tooling.md`).
 
 ```
 ## PR Validation Report
@@ -712,7 +713,9 @@ Spec sync:      `Spec: NNN` in the body; scenarios in the diff ⊆ the spec's sc
                 amended in this PR); mirror guard green; no production change outside the fence.
 
 Report:         Five sections — Purity | Idempotency | Coverage | Claims | Spec Sync
+                (preflight: 0 · Tooling first)
 Verdict:        PASS only when all five sections have zero actionable findings
+                and no required tooling check failed
 ```
 
 For language-specific impurity detection patterns, see `references/purity-checklist.md`.
@@ -720,3 +723,4 @@ For worked examples of each coverage gap pattern, see `references/gap-patterns.m
 For the claim-to-mutation catalogue and worked removal checks, see `references/claim-verification.md`.
 For acquiring a GitHub pull request and safely isolating removal checks, see `references/github-pr-workflow.md`.
 For validating a branch and a draft before the pull request exists, see `references/preflight-workflow.md`.
+For the deterministic tools, their configuration and their statuses, see `references/tooling.md`.

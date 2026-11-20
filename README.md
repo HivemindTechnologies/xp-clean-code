@@ -161,9 +161,14 @@ plugins/pr-validation/                    # verifying what was built
 └── skills/
     └── pr-validation/
         ├── SKILL.md                      # The five analyses — loaded on demand
+        ├── scripts/
+        │   └── preflight_tools.py        # Runs the deterministic checks on the branch's changes
+        ├── rules/
+        │   └── purity/                   # semgrep impurity rules: Scala, Python, Rust, Java, TypeScript
         └── references/
             ├── github-pr-workflow.md     # Shared GitHub acquisition + isolated removal checks
             ├── preflight-workflow.md     # Local branch + draft PR inputs; recording a preflight
+            ├── tooling.md                # Deterministic checks, .pr-preflight.toml, statuses
             ├── purity-checklist.md       # Impurity signals + absence-vs-failure signals:
             │                             #   Python, Scala, Java, TypeScript, Rust
             ├── gap-patterns.md           # Eleven coverage gap patterns, with before/after scenarios
@@ -263,6 +268,20 @@ The plugin also ships a hook that runs the preflight whenever an agent tries to 
 | Cursor | `hooks/hooks-cursor.json`, `beforeShellExecution` | Declared in the Cursor manifest. MCP tool calls are not gated. |
 
 The hook needs `python3` and `git` on the `PATH`. It fails open: outside a git repository, without git, or on unreadable input, the call proceeds. It does not see pull requests opened in a browser. To turn it off for one repository, run `git config pr-preflight.enabled false`.
+
+#### Deterministic Tooling
+
+The preflight also runs tools whose findings feed the analyses, reported in a **0 · Tooling** section before them. Every check looks only at the branch's commits and changed lines:
+
+| Check | Tool | Informs |
+|---|---|---|
+| Secrets | gitleaks (redacted) | publishing safely |
+| Coverage of changed lines | diff-cover, on a report the project produced | Analysis 3 |
+| Impurity signals | semgrep, with rules shipped for Scala, Python, Rust, Java and TypeScript | Analysis 1 |
+| Complexity, duplication | lizard, jscpd | Clean Code |
+| The project's own checks | pre-commit, or ruff, mypy, cargo, sbt, Gradle, Maven, ESLint, tsc, gofmt, golangci-lint, clang-format where configured | avoiding a failed CI run |
+
+All checks are advisory until `.pr-preflight.toml` makes them required. Missing tools are reported, never installed; slow checks run only after you agree. See [`references/tooling.md`](plugins/pr-validation/skills/pr-validation/references/tooling.md) for the configuration, the per-language detection, and how to produce coverage reports.
 
 ### The `spec-driven` Plugin
 

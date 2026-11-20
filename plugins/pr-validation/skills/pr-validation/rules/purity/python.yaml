@@ -1,0 +1,77 @@
+# Impurity signals for Analysis 1 (Purity). Each finding is evidence for the
+# analysis to classify as Boundary or Violation; it is not a verdict on its own.
+# Mirrors references/purity-checklist.md, Python section.
+rules:
+  - id: python-clock
+    languages: [python]
+    severity: INFO
+    message: Clock read. The result depends on when this runs; pass the time in, or keep this call at the boundary.
+    metadata: {category: clock}
+    pattern-either:
+      - pattern: datetime.datetime.now(...)
+      - pattern: datetime.datetime.utcnow(...)
+      - pattern: datetime.date.today(...)
+      - pattern: time.time(...)
+      - pattern: time.time_ns(...)
+      - pattern: time.monotonic(...)
+      - pattern: time.perf_counter(...)
+
+  - id: python-random
+    languages: [python]
+    severity: INFO
+    message: Random read. The result differs between runs; pass a seed or a generator in, or keep this call at the boundary.
+    metadata: {category: random}
+    pattern-either:
+      - pattern: random.$F(...)
+      - pattern: uuid.uuid1(...)
+      - pattern: uuid.uuid4(...)
+      - pattern: secrets.$F(...)
+      - pattern: os.urandom(...)
+
+  - id: python-environment
+    languages: [python]
+    severity: INFO
+    message: Environment read. Hidden input; pass configuration in as a value.
+    metadata: {category: environment}
+    pattern-either:
+      - pattern: os.environ[...]
+      - pattern: os.environ.get(...)
+      - pattern: os.getenv(...)
+
+  - id: python-file-io
+    languages: [python]
+    severity: INFO
+    message: File I/O. Acceptable at the boundary only.
+    metadata: {category: io}
+    pattern-either:
+      - pattern: open(...)
+      - pattern: $P.read_text(...)
+      - pattern: $P.write_text(...)
+      - pattern: $P.read_bytes(...)
+      - pattern: $P.write_bytes(...)
+      - pattern: shutil.$F(...)
+
+  - id: python-network-io
+    languages: [python]
+    severity: INFO
+    message: Network I/O. Acceptable at the boundary only.
+    metadata: {category: io}
+    pattern-either:
+      - pattern: requests.$F(...)
+      - pattern: httpx.$F(...)
+      - pattern: urllib.request.urlopen(...)
+      - pattern: socket.socket(...)
+
+  - id: python-console
+    languages: [python]
+    severity: INFO
+    message: Console output. A write-only side effect; flag it inside domain logic.
+    metadata: {category: io}
+    pattern: print(...)
+
+  - id: python-global-mutation
+    languages: [python]
+    severity: INFO
+    message: Global statement. The function writes shared state.
+    metadata: {category: mutation}
+    pattern: global $X

@@ -1,0 +1,62 @@
+# Impurity signals for Analysis 1 (Purity). Each finding is evidence for the
+# analysis to classify as Boundary or Violation; it is not a verdict on its own.
+# Mirrors references/purity-checklist.md, Scala section.
+rules:
+  - id: scala-clock
+    languages: [scala]
+    severity: INFO
+    message: Clock read. The result depends on when this runs; pass the time or a Clock in, or keep this call at the boundary.
+    metadata: {category: clock}
+    pattern-either:
+      - pattern: System.currentTimeMillis()
+      - pattern: System.nanoTime()
+      - patterns:
+          - pattern: $T.now(...)
+          - metavariable-regex:
+              metavariable: $T
+              regex: ^(java\.time\.)?(Instant|LocalDateTime|LocalDate|LocalTime|ZonedDateTime|OffsetDateTime)$
+
+  - id: scala-random
+    languages: [scala]
+    severity: INFO
+    message: Random read. The result differs between runs; pass a seed or a generator in, or keep this call at the boundary.
+    metadata: {category: random}
+    pattern-either:
+      - pattern: scala.util.Random.$F(...)
+      - pattern: Random.$F(...)
+      - pattern: new scala.util.Random(...)
+      - pattern: new Random(...)
+      - pattern: UUID.randomUUID()
+      - pattern: java.util.UUID.randomUUID()
+
+  - id: scala-environment
+    languages: [scala]
+    severity: INFO
+    message: Environment read. Hidden input; pass configuration in as a value.
+    metadata: {category: environment}
+    pattern-either:
+      - pattern: sys.env
+      - pattern: sys.props
+      - pattern: System.getenv(...)
+      - pattern: System.getProperty(...)
+
+  - id: scala-io
+    languages: [scala]
+    severity: INFO
+    message: I/O. Acceptable at the boundary only.
+    metadata: {category: io}
+    pattern-either:
+      - pattern: Source.$F(...)
+      - pattern: scala.io.Source.$F(...)
+      - pattern: Files.$F(...)
+      - pattern: println(...)
+      - pattern: print(...)
+
+  - id: scala-var
+    languages: [scala]
+    severity: INFO
+    message: Mutable variable. Prefer a val and a new value over reassignment.
+    metadata: {category: mutation}
+    pattern-either:
+      - pattern: var $X = $E
+      - pattern: "var $X: $T = $E"
