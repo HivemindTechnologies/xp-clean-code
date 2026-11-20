@@ -293,6 +293,23 @@ class Judges(unittest.TestCase):
         result = tools.judge(self.planned("diff-cover"), tools.Run(0, "", "", report), {}, Config(fail_under=95))
         self.assertEqual(result.status, "FAIL")
 
+    def test_markdown_states_every_check_and_the_required_failures(self) -> None:
+        results = [
+            tools.Result("secrets", "gitleaks", True, "fast", "NOT_RUN", reason="gitleaks is not installed"),
+            tools.with_findings(tools.Result("purity", "semgrep", False, "fast", "PASS"),
+                                [tools.Finding("a.py", 3, "python-clock", "Clock read.")]),
+            tools.Result("project:ruff-check", "ruff", False, "fast", "FAIL", reason="ruff exited 1",
+                         output_tail="a.py:1:1: E401"),
+        ]
+        report = {"base": "origin/main", "merge_base": "a" * 40, "head": "b" * 40, "notes": ["a note"],
+                  "checks": [tools.result_dict(result) for result in results], "summary": tools.summarise(results)}
+        markdown = tools.render_markdown(report)
+        self.assertIn("| secrets | gitleaks | yes | NOT_RUN | gitleaks is not installed |", markdown)
+        self.assertIn("- `a.py:3` python-clock: Clock read.", markdown)
+        self.assertIn("a.py:1:1: E401", markdown)
+        self.assertIn("- a note", markdown)
+        self.assertTrue(markdown.endswith("**Required checks failed:** secrets"))
+
     def test_output_tail_drops_colour_codes(self) -> None:
         self.assertEqual(tools.tail("\x1b[31m-old\x1b(B\x1b[m\n\x1b[32m+new\x1b[0m"), "-old\n+new")
 
