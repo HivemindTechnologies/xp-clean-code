@@ -72,6 +72,8 @@ rules:
   - id: python-global-mutation
     languages: [python]
     severity: INFO
-    message: Global statement. The function writes shared state.
+    message: Global or nonlocal statement. The function writes state outside its own scope.
     metadata: {category: mutation}
-    pattern: global $X
+    pattern-either:
+      - pattern: global $X
+      - pattern: nonlocal $X

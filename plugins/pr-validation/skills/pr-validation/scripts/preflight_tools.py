@@ -191,6 +191,11 @@ def parse_changed_lines(diff: str) -> dict[str, frozenset[int]]:
     return {path: frozenset(lines) for path, lines in changed.items()}
 
 
+def source_pathspecs() -> tuple[str, ...]:
+    """Git pathspecs for every supported source file, at any depth."""
+    return tuple(f":(glob,icase)**/*{extension}" for extension in sorted(LANGUAGE_EXTENSIONS))
+
+
 def language_of(path: str) -> Optional[str]:
     return LANGUAGE_EXTENSIONS.get(Path(path).suffix.lower())
 
@@ -270,6 +275,19 @@ def is_disabled(check_id: str, config: Config) -> bool:
 def touches(changed: Mapping[str, frozenset[int]], path: str, start: int, end: int) -> bool:
     lines = changed.get(path)
     return bool(lines) and any(start <= line <= end for line in lines)  # type: ignore[union-attr]
+
+
+TEST_PATH = re.compile(
+    r"(^|/)(tests?|__tests__|src/test|src/it|testdata|fixtures)/"   # test directories
+    r"|(^|/)test_[^/]*\.py$|_test\.(py|go|rs)$|(^|/)conftest\.py$"   # Python, Go, Rust files
+    r"|\.(spec|test)\.(ts|tsx|mts|cts)$"                              # TypeScript
+    r"|(Test|Tests|Spec|Suite|IT)\.(java|kt|scala)$"                   # JVM test classes
+)
+
+
+def is_test_path(path: str) -> bool:
+    """Test code may do I/O and panic freely; purity is a property of production code."""
+    return TEST_PATH.search(path) is not None
 
 
 def in_domain(path: str, domain_paths: Sequence[str]) -> bool:
@@ -361,7 +379,7 @@ def plan_duplication(snapshot: Snapshot, config: Config) -> Planned | Skipped:
 def plan_purity(snapshot: Snapshot, config: Config) -> Planned | Skipped:
     groups = group_by_language(snapshot.changed)
     files = [path for language in FIRST_CLASS for path in groups.get(language, [])
-             if not config.domain_paths or in_domain(path, config.domain_paths)]
+             if not is_test_path(path) and (not config.domain_paths or in_domain(path, config.domain_paths))]
     if not files:
         where = " under purity.domain_paths" if config.domain_paths else ""
         return Skipped("purity", "semgrep", is_required("purity", config),
@@ -420,12 +438,15 @@ def _python_tool(tool: str, files: Sequence[str]) -> Callable[[Directory, Mappin
     return check
 
 
-def _node_bin(name: str, config_files: Sequence[str] = ()) -> Callable[[Directory, Mapping[str, Directory], str], bool]:
-    def check(directory: Directory, _: Mapping[str, Directory], __: str) -> bool:
-        has_config = not config_files or directory.has(*config_files)
-        return has_config and directory.has(f"node_modules/.bin/{name}")
+def _has_here(names: Sequence[str]) -> Callable[[Directory, Mapping[str, Directory], str], bool]:
+    """Configured when any of `names` exists in the project root itself."""
+    return lambda directory, _, __: directory.has(*names)
 
-    return check
+
+def node_bin_installed(tool: str, directories: Mapping[str, Directory], root: str) -> bool:
+    """npm, pnpm and yarn workspaces may hoist binaries to a parent's node_modules."""
+    return any(directories.get(directory, Directory()).has(f"node_modules/.bin/{tool}")
+               for directory in directory_and_parents(root))
 
 
 def _mentions(*needles: str) -> Callable[[Directory, Mapping[str, Directory], str], bool]:
@@ -474,14 +495,14 @@ NATIVE_CHECKS: tuple[NativeCheck, ...] = (
     NativeCheck("project:checkstyle-maven", "jvm", "mvn", "slow", ("pom.xml",),
                 _mentions("maven-checkstyle-plugin"), lambda root, files, mb: ("mvn", "-q", "checkstyle:check")),
     NativeCheck("project:eslint", "typescript", "eslint", "fast", ("package.json",),
-                _node_bin("eslint", ESLINT_CONFIGS),
-                lambda root, files, mb: ("node_modules/.bin/eslint", *files)),
+                _has_here(ESLINT_CONFIGS),
+                lambda root, files, mb: ("npx", "--no-install", "eslint", *files)),
     NativeCheck("project:biome", "typescript", "biome", "fast", ("package.json",),
-                _node_bin("biome", ("biome.json", "biome.jsonc")),
-                lambda root, files, mb: ("node_modules/.bin/biome", "ci", *files)),
+                _has_here(("biome.json", "biome.jsonc")),
+                lambda root, files, mb: ("npx", "--no-install", "biome", "ci", *files)),
     NativeCheck("project:tsc", "typescript", "tsc", "slow", ("package.json",),
-                _node_bin("tsc", ("tsconfig.json",)),
-                lambda root, files, mb: ("node_modules/.bin/tsc", "--noEmit")),
+                _has_here(("tsconfig.json",)),
+                lambda root, files, mb: ("npx", "--no-install", "tsc", "--noEmit")),
     NativeCheck("project:gofmt", "go", "gofmt", "fast", ("go.mod",),
                 lambda directory, _, __: True,
                 lambda root, files, mb: ("gofmt", "-l", *files), kind="listing"),
@@ -496,7 +517,7 @@ NATIVE_CHECKS: tuple[NativeCheck, ...] = (
                 lambda root, files, mb: ("clang-format", "--dry-run", "--Werror", *files)),
 )
 
-TOOLS_IN_PROJECT = {"eslint", "biome", "tsc", "gradle"}  # resolved inside the project, not on PATH
+NODE_TOOLS = {"eslint", "biome", "tsc"}  # resolved from the project's node_modules, not from PATH
 
 
 def plan_pre_commit(snapshot: Snapshot, config: Config) -> Planned | Skipped:
@@ -529,7 +550,12 @@ def plan_native_at_root(check: NativeCheck, root: str, files: Sequence[str], sna
     required = is_required(check_id, config)
     if check.tool == "gradle" and not directory.has("gradlew"):
         return Skipped(check_id, check.tool, required, "no ./gradlew wrapper", check.cost)
-    if check.tool not in TOOLS_IN_PROJECT and check.tool not in snapshot.tools:
+    if check.tool in NODE_TOOLS:
+        if not node_bin_installed(check.tool, snapshot.directories, root):
+            return Skipped(check_id, check.tool, required,
+                           f"{check.tool} is configured but not installed in node_modules; run the "
+                           "project's install (npm ci, pnpm install or yarn install)", check.cost)
+    elif check.tool != "gradle" and check.tool not in snapshot.tools:
         return Skipped(check_id, check.tool, required, f"{check.tool} is not installed", check.cost)
     relative_files = [relative_to(root, path) for path in files]
     return Planned(check_id, check.tool, check.argv(root, relative_files, snapshot.merge_base),
@@ -608,16 +634,17 @@ def parse_jscpd(report: str, changed: Mapping[str, frozenset[int]]) -> list[Find
 
 def parse_semgrep(output: str, changed: Mapping[str, frozenset[int]]) -> tuple[list[Finding], list[str]]:
     data = json.loads(output)
-    findings = []
+    findings: dict[tuple[str, int, str], Finding] = {}  # one finding per rule and line
     for result in data.get("results", []):
         path = os.path.normpath(str(result.get("path", "")))
         line = int(result.get("start", {}).get("line", 0))
         end = int(result.get("end", {}).get("line", line))
         if touches(changed, path, line, end):
             rule = str(result.get("check_id", "")).rsplit(".", 1)[-1]
-            findings.append(Finding(path, line, rule, str(result.get("extra", {}).get("message", ""))))
+            findings.setdefault((path, line, rule),
+                                Finding(path, line, rule, str(result.get("extra", {}).get("message", ""))))
     errors = [str(error.get("message", error)) for error in data.get("errors", [])]
-    return findings, errors
+    return list(findings.values()), errors
 
 
 def parse_status_paths(porcelain: str) -> list[str]:
@@ -875,7 +902,10 @@ def load_config(repo: Path) -> tuple[Config, list[str], Optional[str]]:
 def take_snapshot(repo: Path, base_ref: str, config: Config) -> tuple[Snapshot, str]:
     merge_base = git(repo, "merge-base", base_ref, "HEAD").strip()
     head = git(repo, "rev-parse", "HEAD").strip()
-    diff = git(repo, "diff", "--unified=0", "--no-color", "--no-ext-diff", "--diff-filter=ACMR", merge_base, "HEAD")
+    # Only source files need changed lines; gitleaks reads the commits itself. Limiting the
+    # diff keeps a branch that adds megabytes of data or generated files cheap to read.
+    diff = git(repo, "diff", "--unified=0", "--no-color", "--no-ext-diff", "--diff-filter=ACMR",
+               merge_base, "HEAD", "--", *source_pathspecs())
     changed = parse_changed_lines(diff)
     reports = tuple(report for report in (config.coverage_reports or COVERAGE_CANDIDATES)
                     if (repo / report).is_file())
@@ -925,7 +955,7 @@ def notes_for(repo: Path, snapshot: Snapshot, config: Config, head_time: int) ->
         path = repo / report
         if path.is_file() and path.stat().st_mtime < head_time:
             notes.append(f"coverage report {report} is older than HEAD; regenerate it for an accurate result")
-    if snapshot.changed and not group_by_language(snapshot.changed):
+    if not snapshot.changed:
         notes.append("no changed files in a supported language; only the secrets check applies")
     return notes
 

@@ -43,6 +43,18 @@ def mutates_global():
     counter += 1
 
 
+def counter_factory():
+    count = 0
+
+    def increment():
+        # ruleid: python-global-mutation
+        nonlocal count
+        count += 1
+        return count
+
+    return increment
+
+
 def pure(price: int, quantity: int, now: datetime.datetime) -> int:
     # ok: python-clock
     elapsed = now.timestamp()

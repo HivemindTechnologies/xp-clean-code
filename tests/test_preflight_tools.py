@@ -121,6 +121,18 @@ class PlansCoreChecks(unittest.TestCase):
         self.assertIn("c.scala", argv)
         self.assertNotIn("b.go", argv)
 
+    def test_purity_skips_test_code(self) -> None:
+        test_files = ["tests/it.rs", "src/test/scala/AggregatorTest.scala", "analysis/test_cue.py",
+                      "src/app.spec.ts", "pkg/conftest.py", "src/main/java/OrderTest.java", "a/fixtures/x.py"]
+        production = ["src/main/scala/Aggregator.scala", "src/lib.rs", "src/testing_utils.py", "src/contest.py"]
+        argv = by_id(tools.plan(snapshot({path: {1} for path in test_files + production}), Config()))["purity"].argv
+        for path in test_files:
+            with self.subTest(test=path):
+                self.assertNotIn(path, argv)
+        for path in production:
+            with self.subTest(production=path):
+                self.assertIn(path, argv)
+
     def test_purity_respects_domain_paths(self) -> None:
         config = Config(domain_paths=("src/domain/",))
         checks = by_id(tools.plan(snapshot({"src/domain/a.py": {1}, "src/http/b.py": {1}}), config))
@@ -186,14 +198,29 @@ class PlansProjectChecks(unittest.TestCase):
         checks = tools.plan(snapshot({"a.py": {1}}, directories), Config())
         self.assertFalse([check for check in checks if check.id.startswith("project:")])
 
-    def test_node_tools_need_node_modules(self) -> None:
+    def test_configured_node_tools_without_node_modules_are_reported(self) -> None:
         bare = {"": Directory(frozenset({"package.json", "eslint.config.js", "tsconfig.json"}))}
+        checks = by_id(tools.plan(snapshot({"a.ts": {1}}, bare), Config()))
+        for check_id in ("project:eslint", "project:tsc"):
+            with self.subTest(check=check_id):
+                self.assertIsInstance(checks[check_id], tools.Skipped)
+                self.assertIn("configured but not installed", checks[check_id].reason)
+        self.assertNotIn("project:biome", checks)
+
+    def test_node_tools_run_through_npx(self) -> None:
         installed = {"": Directory(frozenset({"package.json", "eslint.config.js", "tsconfig.json",
                                               "node_modules/.bin/eslint", "node_modules/.bin/tsc"}))}
-        self.assertFalse([c for c in tools.plan(snapshot({"a.ts": {1}}, bare), Config()) if c.id.startswith("project:")])
         checks = by_id(tools.plan(snapshot({"a.ts": {1}}, installed), Config()))
-        self.assertEqual(checks["project:eslint"].cost, "fast")
+        self.assertEqual(checks["project:eslint"].argv, ("npx", "--no-install", "eslint", "a.ts"))
         self.assertEqual(checks["project:tsc"].cost, "slow")
+
+    def test_hoisted_node_modules_count_as_installed(self) -> None:
+        directories = {"": Directory(frozenset({"node_modules/.bin/eslint"})),
+                       "packages/web": Directory(frozenset({"package.json", "eslint.config.js"})),
+                       "packages/web/src": Directory()}
+        check = by_id(tools.plan(snapshot({"packages/web/src/a.ts": {1}}, directories), Config()))["project:eslint@packages/web"]
+        self.assertIsInstance(check, tools.Planned)
+        self.assertEqual(check.argv[-1], "src/a.ts")
 
     def test_gradle_without_wrapper_is_reported(self) -> None:
         directories = {"": Directory(frozenset({"build.gradle.kts"}), {"build.gradle.kts": 'id("com.diffplug.spotless")'})}
@@ -258,6 +285,13 @@ class ParsesToolOutput(unittest.TestCase):
         findings, errors = tools.parse_semgrep(output, self.changed)
         self.assertEqual([(f.line, f.rule) for f in findings], [(5, "python-clock")])
         self.assertEqual(errors, [])
+
+    def test_semgrep_reports_one_finding_per_rule_and_line(self) -> None:
+        hit = {"path": "a.py", "start": {"line": 5}, "end": {"line": 5}, "check_id": "scala-clock",
+               "extra": {"message": "Clock read."}}
+        other = dict(hit, check_id="scala-io")
+        findings, _ = tools.parse_semgrep(json.dumps({"results": [hit, dict(hit), other]}), self.changed)
+        self.assertEqual(sorted(f.rule for f in findings), ["scala-clock", "scala-io"])
 
     def test_gitleaks_never_copies_the_secret(self) -> None:
         report = json.dumps([{"File": "a.py", "StartLine": 3, "RuleID": "github-pat", "Description": "GitHub token",
@@ -419,6 +453,11 @@ class EndToEnd(unittest.TestCase):
         check = report["checks"][0]
         self.assertEqual(check["status"], "FAIL", check)
         self.assertEqual([finding["line"] for finding in check["findings"]], [2])
+
+    def test_only_source_files_are_diffed(self) -> None:
+        self.commit({"src/deep/a.py": "x = 1\n", "A.JAVA": "class A {}\n", "data/results.json": "{}\n" * 1000})
+        _, report = self.run_tools("--plan")
+        self.assertEqual(report["languages"], {"java": ["A.JAVA"], "python": ["src/deep/a.py"]})
 
     def test_only_dirty_checked_files_are_noted(self) -> None:
         self.commit({"a.py": "x = 1\n", "notes.txt": "n\n"})

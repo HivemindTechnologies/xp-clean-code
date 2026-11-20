@@ -52,3 +52,22 @@ fn parse_checked(raw: &str) -> Result<u32, std::num::ParseIntError> {
 fn age(now: SystemTime, born: SystemTime) -> Option<std::time::Duration> {
     now.duration_since(born).ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses() {
+        // ok: rust-panic
+        let value: u32 = "1".parse().unwrap();
+        // ok: rust-clock
+        let _now = SystemTime::now();
+        // ok: rust-io
+        println!("{}", value);
+    }
+}
+
+// ok: rust-panic
+#[test]
+fn top_level_test() { "4".parse::<u32>().unwrap(); }

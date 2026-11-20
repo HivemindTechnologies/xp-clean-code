@@ -9,9 +9,13 @@ rules:
     metadata: {category: clock}
     pattern-either:
       - pattern: System.currentTimeMillis()
+      - pattern: System.currentTimeMillis
       - pattern: System.nanoTime()
+      - pattern: System.nanoTime
       - patterns:
-          - pattern: $T.now(...)
+          - pattern-either:
+              - pattern: $T.now(...)
+              - pattern: $T.now
           - metavariable-regex:
               metavariable: $T
               regex: ^(java\.time\.)?(Instant|LocalDateTime|LocalDate|LocalTime|ZonedDateTime|OffsetDateTime)$

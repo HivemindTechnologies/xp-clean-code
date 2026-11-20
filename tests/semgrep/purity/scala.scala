@@ -8,6 +8,14 @@ object Impure {
     // ruleid: scala-clock
     System.currentTimeMillis()
 
+  def stampWithoutParentheses: Long =
+    // ruleid: scala-clock
+    System.currentTimeMillis
+
+  def instantWithoutParentheses: Instant =
+    // ruleid: scala-clock
+    Instant.now
+
   def today(): LocalDate =
     // ruleid: scala-clock
     LocalDate.now()
