@@ -136,6 +136,26 @@ class PlansCoreChecks(unittest.TestCase):
         argv = by_id(tools.plan(snapshot({"a.ts": {1}, "b.cpp": {1}}), Config()))["duplication"].argv
         self.assertEqual(argv[argv.index("--format") + 1], "c,cpp,tsx,typescript")
 
+    def test_exclude_removes_paths_from_file_checks_but_not_secrets(self) -> None:
+        config = Config(exclude=("tests/fixtures/**",))
+        trimmed = tools.without_excluded(snapshot({"tests/fixtures/x.py": {1}, "src/a.py": {1}}), config)
+        self.assertEqual(set(trimmed.changed), {"src/a.py"})
+        checks = by_id(tools.plan(tools.without_excluded(snapshot({"tests/fixtures/x.py": {1}}), config), config))
+        self.assertIsInstance(checks["secrets"], tools.Planned)
+        self.assertIsInstance(checks["purity"], tools.Skipped)
+
+    def test_exclude_reaches_jscpd(self) -> None:
+        config = Config(exclude=("gen/**",))
+        argv = by_id(tools.plan(snapshot({"a.py": {1}}), config))["duplication"].argv
+        self.assertIn("gen/**", argv[argv.index("--ignore") + 1])
+
+    def test_check_ids_name_their_variants(self) -> None:
+        names = frozenset({"project:ruff-check"})
+        self.assertTrue(tools.named_in("project:ruff-check@svc", names))
+        self.assertTrue(tools.named_in("project:mypy@svc", frozenset({"project"})))
+        self.assertFalse(tools.named_in("project:mypy@svc", names))
+        self.assertFalse(tools.named_in("secrets", frozenset({"project"})))
+
     def test_only(self) -> None:
         checks = tools.plan(snapshot({"a.py": {1}}), Config(), frozenset({"secrets"}))
         self.assertEqual([check.id for check in checks], ["secrets"])
@@ -198,6 +218,12 @@ class PlansProjectChecks(unittest.TestCase):
         self.assertTrue(all(check.required for check in checks if check.id.startswith("project:")))
 
 
+class ParsesStatus(unittest.TestCase):
+    def test_porcelain_paths_including_renames(self) -> None:
+        porcelain = " M a.py\0R  new.py\0old.py\0M  dir/b c.rs\0"
+        self.assertEqual(tools.parse_status_paths(porcelain), ["a.py", "new.py", "dir/b c.rs"])
+
+
 class ParsesToolOutput(unittest.TestCase):
     changed = {"a.py": frozenset({5, 6}), "b.py": frozenset({40})}
 
@@ -251,24 +277,24 @@ class Judges(unittest.TestCase):
         return tools.Planned("x", tool, (tool,), "", "fast", kind, True)
 
     def test_exit_status(self) -> None:
-        self.assertEqual(tools.judge(self.planned("exit"), 0, "", "", None, {}, Config()).status, "PASS")
-        failed = tools.judge(self.planned("exit"), 1, "E1 bad", "", None, {}, Config())
+        self.assertEqual(tools.judge(self.planned("exit"), tools.Run(0, "", "", None), {}, Config()).status, "PASS")
+        failed = tools.judge(self.planned("exit"), tools.Run(1, "E1 bad", "", None), {}, Config())
         self.assertEqual((failed.status, failed.output_tail), ("FAIL", "E1 bad"))
 
     def test_listing(self) -> None:
-        result = tools.judge(self.planned("listing", "gofmt"), 0, "main.go\n", "", None, {}, Config())
+        result = tools.judge(self.planned("listing", "gofmt"), tools.Run(0, "main.go\n", "", None), {}, Config())
         self.assertEqual((result.status, result.findings[0].file), ("FAIL", "main.go"))
 
     def test_coverage_threshold(self) -> None:
         report = json.dumps({"src_stats": {"a.py": {"violation_lines": [5]}}, "total_percent_covered": 90})
-        result = tools.judge(self.planned("diff-cover"), 0, "", "", report, {}, Config(fail_under=80))
+        result = tools.judge(self.planned("diff-cover"), tools.Run(0, "", "", report), {}, Config(fail_under=80))
         self.assertEqual(result.status, "PASS")
         self.assertEqual(result.total_findings, 1)
-        result = tools.judge(self.planned("diff-cover"), 0, "", "", report, {}, Config(fail_under=95))
+        result = tools.judge(self.planned("diff-cover"), tools.Run(0, "", "", report), {}, Config(fail_under=95))
         self.assertEqual(result.status, "FAIL")
 
     def test_unreadable_output_is_an_error(self) -> None:
-        result = tools.judge(self.planned("semgrep"), 0, "not json", "", None, {}, Config())
+        result = tools.judge(self.planned("semgrep"), tools.Run(0, "not json", "", None), {}, Config())
         self.assertEqual(result.status, "ERROR")
 
     def test_required_checks_that_did_not_pass(self) -> None:
@@ -359,6 +385,15 @@ class EndToEnd(unittest.TestCase):
         _, report = self.run_tools("--only", "project")
         check = report["checks"][0]
         self.assertIn(check["status"], ("SKIPPED_SLOW", "NOT_RUN"))
+
+    def test_only_dirty_checked_files_are_noted(self) -> None:
+        self.commit({"a.py": "x = 1\n", "notes.txt": "n\n"})
+        (self.repo / "notes.txt").write_text("changed\n")
+        _, report = self.run_tools("--plan")
+        self.assertEqual(report["notes"], [])
+        (self.repo / "a.py").write_text("x = 2\n")
+        _, report = self.run_tools("--plan")
+        self.assertTrue(any("a.py" in note for note in report["notes"]))
 
     def test_plan_runs_nothing(self) -> None:
         self.commit({"a.py": "x = 1\n"})

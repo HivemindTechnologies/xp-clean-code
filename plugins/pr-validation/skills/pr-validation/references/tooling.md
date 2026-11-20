@@ -68,6 +68,7 @@ A **required** check fails the preflight on FAIL, ERROR, NOT_RUN and SKIPPED_SLO
 [checks]
 required = ["secrets", "project"]   # check ids; "project" covers every project:* check
 disabled = ["duplication"]
+exclude = ["tests/fixtures/**", "src/generated/**"]   # prefixes or globs; every check except secrets
 
 [coverage]
 reports = ["target/scala-2.13/coverage-report/cobertura.xml"]
@@ -82,6 +83,8 @@ min_tokens = 50
 [purity]
 domain_paths = ["src/main/scala/com/example/domain/", "src/domain/**"]   # prefixes or globs
 ```
+
+`exclude` removes paths from every check that reads files: fixtures that are impure on purpose, generated code, vendored code. Secrets are still checked everywhere.
 
 `purity` can be required only when `domain_paths` names the domain code: impurity at the boundary is legitimate, so without domain paths the findings stay advisory. With domain paths, only files under them are scanned.
 

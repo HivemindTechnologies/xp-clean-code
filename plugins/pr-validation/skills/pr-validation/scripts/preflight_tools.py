@@ -94,6 +94,7 @@ class Config:
     max_ccn: int = 10
     min_tokens: int = 50
     domain_paths: tuple[str, ...] = ()
+    exclude: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -241,6 +242,7 @@ def parse_config(data: Mapping[str, object]) -> tuple[Config, list[str]]:
         max_ccn=int(number(complexity, "max_ccn", 10) or 10),
         min_tokens=int(number(duplication, "min_tokens", 50) or 50),
         domain_paths=strings(purity, "domain_paths"),
+        exclude=strings(checks, "exclude"),
     )
     if "purity" in config.required and not config.domain_paths:
         warnings.append(
@@ -251,16 +253,18 @@ def parse_config(data: Mapping[str, object]) -> tuple[Config, list[str]]:
     return config, warnings
 
 
+def named_in(check_id: str, names: frozenset[str]) -> bool:
+    """`project:ruff-check@svc` is named by itself, by `project:ruff-check`, and by `project`."""
+    base = check_id.split("@")[0]
+    return check_id in names or base in names or (base.startswith("project:") and "project" in names)
+
+
 def is_required(check_id: str, config: Config) -> bool:
-    return check_id in config.required or (
-        check_id.startswith("project:") and "project" in config.required
-    )
+    return named_in(check_id, config.required)
 
 
 def is_disabled(check_id: str, config: Config) -> bool:
-    return check_id in config.disabled or (
-        check_id.startswith("project:") and "project" in config.disabled
-    )
+    return named_in(check_id, config.disabled)
 
 
 def touches(changed: Mapping[str, frozenset[int]], path: str, start: int, end: int) -> bool:
@@ -294,85 +298,91 @@ def relative_to(root: str, path: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def plan_core(snapshot: Snapshot, config: Config) -> list[Planned | Skipped]:
-    files = sorted(snapshot.changed)
-    groups = group_by_language(files)
-    plans: list[Planned | Skipped] = []
+def without_excluded(snapshot: Snapshot, config: Config) -> Snapshot:
+    """Drop excluded paths (fixtures, generated or vendored code) from every file-based check."""
+    if not config.exclude:
+        return snapshot
+    kept = {path: lines for path, lines in snapshot.changed.items() if not in_domain(path, config.exclude)}
+    return replace(snapshot, changed=kept)
 
-    def add(check: Planned | Skipped) -> None:
-        if is_disabled(check.id, config):
-            plans.append(Skipped(check.id, check.tool, False, "disabled in .pr-preflight.toml", check.cost))
-        else:
-            plans.append(check)
 
-    def missing(check_id: str, tool: str) -> Skipped:
-        return Skipped(check_id, tool, is_required(check_id, config), f"{tool} is not installed")
+def missing_tool(check_id: str, tool: str, config: Config) -> Skipped:
+    return Skipped(check_id, tool, is_required(check_id, config), f"{tool} is not installed")
 
-    # secrets
-    if "gitleaks" not in snapshot.tools:
-        add(missing("secrets", "gitleaks"))
-    else:
-        add(Planned("secrets", "gitleaks", (
-            "gitleaks", "git", f"--log-opts={snapshot.merge_base}..HEAD", "--report-format", "json",
-            "--report-path", "{report}", "--redact", "--no-banner", "--exit-code", "0", ".",
-        ), "", "fast", "gitleaks", is_required("secrets", config)))
 
-    # coverage
-    reports = snapshot.coverage_reports
+def needs_tool(check_id: str, tool: str, snapshot: Snapshot, config: Config,
+               make: Callable[[], Planned | Skipped]) -> Planned | Skipped:
+    return make() if tool in snapshot.tools else missing_tool(check_id, tool, config)
+
+
+def plan_secrets(snapshot: Snapshot, config: Config) -> Planned | Skipped:
+    return needs_tool("secrets", "gitleaks", snapshot, config, lambda: Planned("secrets", "gitleaks", (
+        "gitleaks", "git", f"--log-opts={snapshot.merge_base}..HEAD", "--report-format", "json",
+        "--report-path", "{report}", "--redact", "--no-banner", "--exit-code", "0", ".",
+    ), "", "fast", "gitleaks", is_required("secrets", config)))
+
+
+def plan_coverage(snapshot: Snapshot, config: Config) -> Planned | Skipped:
     if "diff-cover" not in snapshot.tools:
-        add(missing("coverage", "diff-cover"))
-    elif not reports:
-        add(Skipped("coverage", "diff-cover", is_required("coverage", config),
-                    "none of the reports under [coverage] reports exists"
-                    if config.coverage_reports else
-                    "no coverage report found; produce one with the project's coverage tool "
-                    "or list it under [coverage] reports"))
-    else:
-        add(Planned("coverage", "diff-cover", (
-            "diff-cover", *reports, f"--compare-branch={snapshot.merge_base}",
-            "--ignore-staged", "--ignore-unstaged", "--format", "json:{report}", "-q",
-        ), "", "fast", "diff-cover", is_required("coverage", config)))
+        return missing_tool("coverage", "diff-cover", config)
+    if not snapshot.coverage_reports:
+        reason = ("none of the reports under [coverage] reports exists" if config.coverage_reports else
+                  "no coverage report found; produce one with the project's coverage tool "
+                  "or list it under [coverage] reports")
+        return Skipped("coverage", "diff-cover", is_required("coverage", config), reason)
+    return needs_tool("coverage", "diff-cover", snapshot, config, lambda: Planned("coverage", "diff-cover", (
+        "diff-cover", *snapshot.coverage_reports, f"--compare-branch={snapshot.merge_base}",
+        "--ignore-staged", "--ignore-unstaged", "--format", "json:{report}", "-q",
+    ), "", "fast", "diff-cover", is_required("coverage", config)))
 
-    # complexity
+
+def plan_complexity(snapshot: Snapshot, config: Config) -> Planned | Skipped:
+    groups = group_by_language(snapshot.changed)
     if not groups:
-        add(Skipped("complexity", "lizard", is_required("complexity", config), "no changed source files"))
-    elif "lizard" not in snapshot.tools:
-        add(missing("complexity", "lizard"))
-    else:
-        sources = [path for language in sorted(groups) for path in groups[language]]
-        add(Planned("complexity", "lizard", ("lizard", "--csv", *sources), "", "fast", "lizard",
-                    is_required("complexity", config)))
+        return Skipped("complexity", "lizard", is_required("complexity", config), "no changed source files")
+    sources = [path for language in sorted(groups) for path in groups[language]]
+    return needs_tool("complexity", "lizard", snapshot, config, lambda: Planned(
+        "complexity", "lizard", ("lizard", "--csv", *sources), "", "fast", "lizard",
+        is_required("complexity", config)))
 
-    # duplication
+
+def plan_duplication(snapshot: Snapshot, config: Config) -> Planned | Skipped:
+    groups = group_by_language(snapshot.changed)
     if not groups:
-        add(Skipped("duplication", "jscpd", is_required("duplication", config), "no changed source files"))
-    elif "jscpd" not in snapshot.tools:
-        add(missing("duplication", "jscpd"))
-    else:
-        formats = ",".join(sorted({fmt for language in groups for fmt in JSCPD_FORMATS[language]}))
-        add(Planned("duplication", "jscpd", (
-            "jscpd", "--silent", "--gitignore", "--reporters", "json", "--output", "{report_dir}",
-            "--min-tokens", str(config.min_tokens), "--format", formats,
-            "--ignore", ",".join(SEARCH_EXCLUDES), ".",
-        ), "", "fast", "jscpd", is_required("duplication", config)))
+        return Skipped("duplication", "jscpd", is_required("duplication", config), "no changed source files")
+    formats = ",".join(sorted({fmt for language in groups for fmt in JSCPD_FORMATS[language]}))
+    return needs_tool("duplication", "jscpd", snapshot, config, lambda: Planned("duplication", "jscpd", (
+        "jscpd", "--silent", "--gitignore", "--reporters", "json", "--output", "{report_dir}",
+        "--min-tokens", str(config.min_tokens), "--format", formats,
+        "--ignore", ",".join((*SEARCH_EXCLUDES, *config.exclude)), ".",
+    ), "", "fast", "jscpd", is_required("duplication", config)))
 
-    # purity
-    purity_files = [path for language in FIRST_CLASS for path in groups.get(language, [])]
-    if config.domain_paths:
-        purity_files = [path for path in purity_files if in_domain(path, config.domain_paths)]
-    if not purity_files:
-        add(Skipped("purity", "semgrep", is_required("purity", config),
-                    "no changed files in Scala, Python, Rust, Java or TypeScript"
-                    + (" under purity.domain_paths" if config.domain_paths else "")))
-    elif "semgrep" not in snapshot.tools:
-        add(missing("purity", "semgrep"))
-    else:
-        add(Planned("purity", "semgrep", (
-            "semgrep", "scan", "--config", str(RULES_DIR), "--json", "--metrics=off",
-            "--disable-version-check", "--quiet", *purity_files,
-        ), "", "fast", "semgrep", is_required("purity", config)))
 
-    return plans
+def plan_purity(snapshot: Snapshot, config: Config) -> Planned | Skipped:
+    groups = group_by_language(snapshot.changed)
+    files = [path for language in FIRST_CLASS for path in groups.get(language, [])
+             if not config.domain_paths or in_domain(path, config.domain_paths)]
+    if not files:
+        where = " under purity.domain_paths" if config.domain_paths else ""
+        return Skipped("purity", "semgrep", is_required("purity", config),
+                       f"no changed files in Scala, Python, Rust, Java or TypeScript{where}")
+    return needs_tool("purity", "semgrep", snapshot, config, lambda: Planned("purity", "semgrep", (
+        "semgrep", "scan", "--config", str(RULES_DIR), "--json", "--metrics=off",
+        "--disable-version-check", "--quiet", *files,
+    ), "", "fast", "semgrep", is_required("purity", config)))
+
+
+CORE_PLANNERS = (plan_secrets, plan_coverage, plan_complexity, plan_duplication, plan_purity)
+
+
+def honour_disabled(check: Planned | Skipped, config: Config) -> Planned | Skipped:
+    if is_disabled(check.id, config):
+        return Skipped(check.id, check.tool, False, "disabled in .pr-preflight.toml", check.cost)
+    return check
+
+
+def plan_core(snapshot: Snapshot, config: Config) -> list[Planned | Skipped]:
+    return [honour_disabled(planner(snapshot, config), config) for planner in CORE_PLANNERS]
 
 
 @dataclass(frozen=True)
@@ -489,60 +499,57 @@ NATIVE_CHECKS: tuple[NativeCheck, ...] = (
 TOOLS_IN_PROJECT = {"eslint", "biome", "tsc", "gradle"}  # resolved inside the project, not on PATH
 
 
-def plan_project(snapshot: Snapshot, config: Config) -> list[Planned | Skipped]:
-    root_dir = snapshot.directories.get("", Directory())
-    if root_dir.has(".pre-commit-config.yaml"):
-        check_id = "project:pre-commit"
-        if is_disabled(check_id, config):
-            return [Skipped(check_id, "pre-commit", False, "disabled in .pr-preflight.toml", "slow")]
-        if "pre-commit" not in snapshot.tools:
-            return [Skipped(check_id, "pre-commit", is_required(check_id, config), "pre-commit is not installed", "slow")]
-        # pre-commit hooks may rewrite files, so it runs in a disposable worktree at HEAD.
-        return [Planned(check_id, "pre-commit", (
-            "pre-commit", "run", "--from-ref", snapshot.merge_base, "--to-ref", "HEAD", "--show-diff-on-failure",
-        ), "", "slow", "exit", is_required(check_id, config), in_worktree=True)]
+def plan_pre_commit(snapshot: Snapshot, config: Config) -> Planned | Skipped:
+    check_id = "project:pre-commit"
+    if "pre-commit" not in snapshot.tools:
+        return Skipped(check_id, "pre-commit", is_required(check_id, config), "pre-commit is not installed", "slow")
+    # pre-commit hooks may rewrite files, so it runs in a disposable worktree at HEAD.
+    return Planned(check_id, "pre-commit", (
+        "pre-commit", "run", "--from-ref", snapshot.merge_base, "--to-ref", "HEAD", "--show-diff-on-failure",
+    ), "", "slow", "exit", is_required(check_id, config), in_worktree=True)
 
-    plans: list[Planned | Skipped] = []
+
+def files_by_root(check: NativeCheck, snapshot: Snapshot) -> dict[str, list[str]]:
+    """Changed files in the check's languages, grouped by the nearest project root."""
     groups = group_by_language(snapshot.changed)
-    for check in NATIVE_CHECKS:
-        # sbt covers Scala; Gradle and Maven checks cover Java and Kotlin.
-        languages = ("java", "kotlin") if check.language == "jvm" else (check.language,)
-        files = [path for language in languages for path in groups.get(language, [])]
-        by_root: dict[str, list[str]] = {}
-        for path in files:
-            root = nearest_root(path, snapshot.directories, *check.markers)
-            if root is not None:
-                by_root.setdefault(root, []).append(path)
-        for root, root_files in sorted(by_root.items()):
-            directory = snapshot.directories.get(root, Directory())
-            if not check.configured(directory, snapshot.directories, root):
-                continue
-            check_id = check.id if root == "" else f"{check.id}@{root}"
-            required = is_required(check.id, config)
-            if is_disabled(check.id, config):
-                plans.append(Skipped(check_id, check.tool, False, "disabled in .pr-preflight.toml", check.cost))
-                continue
-            available = (
-                directory.has("gradlew") if check.tool == "gradle"
-                else check.tool in TOOLS_IN_PROJECT or check.tool in snapshot.tools
-            )
-            if not available:
-                reason = "no ./gradlew wrapper" if check.tool == "gradle" else f"{check.tool} is not installed"
-                plans.append(Skipped(check_id, check.tool, required, reason, check.cost))
-                continue
-            relative_files = [relative_to(root, path) for path in root_files]
-            plans.append(Planned(check_id, check.tool, check.argv(root, relative_files, snapshot.merge_base),
-                                 root, check.cost, check.kind, required))
-    return plans
+    # sbt covers Scala; Gradle and Maven checks cover Java and Kotlin.
+    languages = ("java", "kotlin") if check.language == "jvm" else (check.language,)
+    by_root: dict[str, list[str]] = {}
+    for path in (path for language in languages for path in groups.get(language, [])):
+        root = nearest_root(path, snapshot.directories, *check.markers)
+        if root is not None:
+            by_root.setdefault(root, []).append(path)
+    return by_root
+
+
+def plan_native_at_root(check: NativeCheck, root: str, files: Sequence[str], snapshot: Snapshot,
+                        config: Config) -> Planned | Skipped:
+    directory = snapshot.directories.get(root, Directory())
+    check_id = check.id if root == "" else f"{check.id}@{root}"
+    required = is_required(check_id, config)
+    if check.tool == "gradle" and not directory.has("gradlew"):
+        return Skipped(check_id, check.tool, required, "no ./gradlew wrapper", check.cost)
+    if check.tool not in TOOLS_IN_PROJECT and check.tool not in snapshot.tools:
+        return Skipped(check_id, check.tool, required, f"{check.tool} is not installed", check.cost)
+    relative_files = [relative_to(root, path) for path in files]
+    return Planned(check_id, check.tool, check.argv(root, relative_files, snapshot.merge_base),
+                   root, check.cost, check.kind, required)
+
+
+def plan_project(snapshot: Snapshot, config: Config) -> list[Planned | Skipped]:
+    if snapshot.directories.get("", Directory()).has(".pre-commit-config.yaml"):
+        return [honour_disabled(plan_pre_commit(snapshot, config), config)]
+    return [
+        honour_disabled(plan_native_at_root(check, root, files, snapshot, config), config)
+        for check in NATIVE_CHECKS
+        for root, files in sorted(files_by_root(check, snapshot).items())
+        if check.configured(snapshot.directories.get(root, Directory()), snapshot.directories, root)
+    ]
 
 
 def plan(snapshot: Snapshot, config: Config, only: frozenset[str] = frozenset()) -> list[Planned | Skipped]:
     checks = plan_core(snapshot, config) + plan_project(snapshot, config)
-    if only:
-        checks = [check for check in checks
-                  if check.id in only or check.id.split("@")[0] in only
-                  or (check.id.startswith("project:") and "project" in only)]
-    return checks
+    return [check for check in checks if named_in(check.id, only)] if only else checks
 
 
 # ---------------------------------------------------------------------------
@@ -613,58 +620,110 @@ def parse_semgrep(output: str, changed: Mapping[str, frozenset[int]]) -> tuple[l
     return findings, errors
 
 
+def parse_status_paths(porcelain: str) -> list[str]:
+    """Paths from `git status --porcelain -z`; a rename's entry is followed by its old path."""
+    entries = porcelain.split("\0")
+    paths: list[str] = []
+    index = 0
+    while index < len(entries):
+        entry = entries[index]
+        if len(entry) > 3:
+            paths.append(entry[3:])
+            if entry[0] in "RC":
+                index += 1  # skip the original path
+        index += 1
+    return paths
+
+
 def tail(text: str, lines: int = OUTPUT_TAIL_LINES) -> str:
     return "\n".join(text.rstrip().splitlines()[-lines:])
 
 
-def judge(check: Planned, returncode: int, stdout: str, stderr: str, report: Optional[str],
-          changed: Mapping[str, frozenset[int]], config: Config) -> Result:
+@dataclass(frozen=True)
+class Run:
+    """What one tool run produced."""
+
+    returncode: int
+    stdout: str
+    stderr: str
+    report: Optional[str]  # the tool's report file, for tools that write one
+
+    @property
+    def output_tail(self) -> str:
+        return tail("\n".join(part for part in (self.stdout, self.stderr) if part))
+
+
+def errored(base: Result, run: Run, reason: str) -> Result:
+    return replace(base, status="ERROR", reason=reason, output_tail=run.output_tail)
+
+
+def judge_gitleaks(base: Result, run: Run, changed: Mapping[str, frozenset[int]], config: Config) -> Result:
+    if run.returncode != 0:
+        return errored(base, run, f"gitleaks exited {run.returncode}")
+    return with_findings(base, parse_gitleaks(run.report or "[]"))
+
+
+def judge_diff_cover(base: Result, run: Run, changed: Mapping[str, frozenset[int]], config: Config) -> Result:
+    if run.returncode != 0 or run.report is None:
+        return errored(base, run, f"diff-cover exited {run.returncode}")
+    findings, total = parse_diff_cover(run.report)
+    result = with_findings(base, findings)
+    if total is None:
+        return result
+    if config.fail_under is None:
+        return replace(result, reason=f"{total:g}% of changed lines covered")
+    return replace(result, status="FAIL" if total < config.fail_under else "PASS",
+                   reason=f"{total:g}% of changed lines covered (fail_under {config.fail_under:g})")
+
+
+def judge_lizard(base: Result, run: Run, changed: Mapping[str, frozenset[int]], config: Config) -> Result:
+    if run.returncode != 0:
+        return errored(base, run, f"lizard exited {run.returncode}")
+    return with_findings(base, parse_lizard(run.stdout, changed, config.max_ccn))
+
+
+def judge_jscpd(base: Result, run: Run, changed: Mapping[str, frozenset[int]], config: Config) -> Result:
+    if run.returncode != 0 or run.report is None:
+        return errored(base, run, f"jscpd exited {run.returncode}")
+    return with_findings(base, parse_jscpd(run.report, changed))
+
+
+def judge_semgrep(base: Result, run: Run, changed: Mapping[str, frozenset[int]], config: Config) -> Result:
+    if run.returncode not in (0, 1):
+        return errored(base, run, f"semgrep exited {run.returncode}")
+    findings, errors = parse_semgrep(run.stdout, changed)
+    result = with_findings(base, findings)
+    return replace(result, reason="; ".join(errors[:3])) if errors else result
+
+
+def judge_listing(base: Result, run: Run, changed: Mapping[str, frozenset[int]], config: Config) -> Result:
+    """Formatters such as `gofmt -l` list the files they would change."""
+    listed = [line for line in run.stdout.splitlines() if line.strip()]
+    if run.returncode != 0 and not listed:
+        return errored(base, run, f"{base.tool} exited {run.returncode}")
+    return with_findings(base, [Finding(path, 0, base.tool, "not formatted") for path in listed])
+
+
+def judge_exit(base: Result, run: Run, changed: Mapping[str, frozenset[int]], config: Config) -> Result:
+    """The project's own check decides through its exit status."""
+    if run.returncode == 0:
+        return base
+    return replace(base, status="FAIL", reason=f"{base.tool} exited {run.returncode}", output_tail=run.output_tail)
+
+
+JUDGES: Mapping[str, Callable[[Result, Run, Mapping[str, frozenset[int]], Config], Result]] = {
+    "gitleaks": judge_gitleaks, "diff-cover": judge_diff_cover, "lizard": judge_lizard,
+    "jscpd": judge_jscpd, "semgrep": judge_semgrep, "listing": judge_listing, "exit": judge_exit,
+}
+
+
+def judge(check: Planned, run: Run, changed: Mapping[str, frozenset[int]], config: Config) -> Result:
     """Turn one tool run into a result. Pure: the run's outputs are its inputs."""
     base = Result(check.id, check.tool, check.required, check.cost, "PASS", command=" ".join(check.argv))
-    combined = tail("\n".join(part for part in (stdout, stderr) if part))
     try:
-        if check.kind == "gitleaks":
-            if returncode != 0:
-                return replace(base, status="ERROR", reason=f"gitleaks exited {returncode}", output_tail=combined)
-            findings = parse_gitleaks(report or "[]")
-            return with_findings(base, findings)
-        if check.kind == "diff-cover":
-            if returncode != 0 or report is None:
-                return replace(base, status="ERROR", reason=f"diff-cover exited {returncode}", output_tail=combined)
-            findings, total = parse_diff_cover(report)
-            result = with_findings(base, findings)
-            if config.fail_under is not None and total is not None:
-                status = "FAIL" if total < config.fail_under else "PASS"
-                return replace(result, status=status,
-                               reason=f"{total:g}% of changed lines covered (fail_under {config.fail_under:g})")
-            return replace(result, reason=f"{total:g}% of changed lines covered" if total is not None else "")
-        if check.kind == "lizard":
-            if returncode != 0:
-                return replace(base, status="ERROR", reason=f"lizard exited {returncode}", output_tail=combined)
-            return with_findings(base, parse_lizard(stdout, changed, config.max_ccn))
-        if check.kind == "jscpd":
-            if returncode != 0 or report is None:
-                return replace(base, status="ERROR", reason=f"jscpd exited {returncode}", output_tail=combined)
-            return with_findings(base, parse_jscpd(report, changed))
-        if check.kind == "semgrep":
-            if returncode not in (0, 1):
-                return replace(base, status="ERROR", reason=f"semgrep exited {returncode}", output_tail=combined)
-            findings, errors = parse_semgrep(stdout, changed)
-            result = with_findings(base, findings)
-            return replace(result, reason="; ".join(errors[:3])) if errors else result
-        if check.kind == "listing":
-            listed = [line for line in stdout.splitlines() if line.strip()]
-            findings = [Finding(path, 0, check.tool, "not formatted") for path in listed]
-            if returncode != 0 and not listed:
-                return replace(base, status="ERROR", reason=f"{check.tool} exited {returncode}", output_tail=combined)
-            return with_findings(base, findings)
-        # "exit": the project's own check decides
-        if returncode == 0:
-            return base
-        return replace(base, status="FAIL", reason=f"{check.tool} exited {returncode}", output_tail=combined)
+        return JUDGES[check.kind](base, run, changed, config)
     except (ValueError, KeyError, TypeError) as error:
-        return replace(base, status="ERROR", reason=f"could not read {check.tool} output: {error}",
-                       output_tail=combined)
+        return errored(base, run, f"could not read {check.tool} output: {error}")
 
 
 def with_findings(result: Result, findings: Sequence[Finding]) -> Result:
@@ -691,34 +750,40 @@ def summarise(results: Sequence[Result]) -> dict[str, object]:
     return {"counts": counts, "required_failed": required_failed}
 
 
+def table_row(result: Mapping[str, object]) -> str:
+    detail = result["reason"] or (f"{result['total_findings']} finding(s)" if result["total_findings"] else "")
+    required = "yes" if result["required"] else "no"
+    return f"| {result['id']} | {result['tool']} | {required} | {result['status']} | {detail} |"
+
+
+def result_details(result: Mapping[str, object]) -> list[str]:
+    findings = result["findings"]
+    assert isinstance(findings, list)
+    if findings:
+        total = result["total_findings"]
+        shown = f", first {len(findings)} shown" if total != len(findings) else ""
+        return ["", f"**{result['id']}** ({total} finding(s){shown})", ""] + [
+            f"- `{finding['file']}:{finding['line']}` {finding['rule']}: {finding['message']}" for finding in findings
+        ]
+    if result["status"] in ("FAIL", "ERROR") and result["output_tail"]:
+        return ["", f"**{result['id']}** output (last lines):", "", "```", str(result["output_tail"]), "```"]
+    return []
+
+
 def render_markdown(report: Mapping[str, object]) -> str:
+    results, notes, summary = report["checks"], report.get("notes"), report["summary"]
+    assert isinstance(results, list) and isinstance(summary, dict)
     lines = [
-        f"**Commits:** `{str(report['merge_base'])[:8]}..{str(report['head'])[:8]}` "
-        f"against `{report['base']}`",
+        f"**Commits:** `{str(report['merge_base'])[:8]}..{str(report['head'])[:8]}` against `{report['base']}`",
         "",
         "| Check | Tool | Required | Status | Detail |",
         "|---|---|---|---|---|",
+        *(table_row(result) for result in results),
     ]
-    results = report["checks"]
-    assert isinstance(results, list)
     for result in results:
-        detail = result["reason"] or (f"{result['total_findings']} finding(s)" if result["total_findings"] else "")
-        lines.append(f"| {result['id']} | {result['tool']} | {'yes' if result['required'] else 'no'} "
-                     f"| {result['status']} | {detail} |")
-    for result in results:
-        if result["findings"]:
-            lines += ["", f"**{result['id']}** ({result['total_findings']} finding(s)"
-                      + (f", first {len(result['findings'])} shown" if result['total_findings'] > len(result['findings']) else "")
-                      + ")", ""]
-            lines += [f"- `{finding['file']}:{finding['line']}` {finding['rule']}: {finding['message']}"
-                      for finding in result["findings"]]
-        elif result["status"] in ("FAIL", "ERROR") and result["output_tail"]:
-            lines += ["", f"**{result['id']}** output (last lines):", "", "```", result["output_tail"], "```"]
-    notes = report.get("notes")
+        lines += result_details(result)
     if isinstance(notes, list) and notes:
-        lines += ["", "**Notes:**"] + [f"- {note}" for note in notes]
-    summary = report["summary"]
-    assert isinstance(summary, dict)
+        lines += ["", "**Notes:**", *(f"- {note}" for note in notes)]
     failed = summary["required_failed"]
     lines += ["", f"**Required checks failed:** {', '.join(failed) if failed else 'none'}"]
     return "\n".join(lines)
@@ -839,14 +904,18 @@ def run_check(repo: Path, check: Planned, changed: Mapping[str, frozenset[int]],
                                capture_output=True, check=False)
         report_file = report_dir / "jscpd-report.json" if check.kind == "jscpd" else report_path
         report = report_file.read_text(encoding="utf-8") if report_file.is_file() else None
-        return judge(check, completed.returncode, completed.stdout, completed.stderr, report, changed, config)
+        return judge(check, Run(completed.returncode, completed.stdout, completed.stderr, report), changed, config)
 
 
 def notes_for(repo: Path, snapshot: Snapshot, config: Config, head_time: int) -> list[str]:
     notes = []
-    status = git(repo, "status", "--porcelain", "--untracked-files=no").strip()
-    if status:
-        notes.append("the working tree has uncommitted changes; checks that read files saw them, "
+    # Only source files are read from the working tree; secrets are read from the commits.
+    sources = {path for paths in group_by_language(snapshot.changed).values() for path in paths}
+    dirty = sorted(set(parse_status_paths(git(repo, "status", "--porcelain", "--untracked-files=no", "-z")))
+                   & sources)
+    if dirty:
+        listed = ", ".join(dirty[:5]) + (f" and {len(dirty) - 5} more" if len(dirty) > 5 else "")
+        notes.append(f"uncommitted changes in checked files ({listed}); checks that read files saw them, "
                      "but the pull request will not contain them")
     for report in snapshot.coverage_reports:
         path = repo / report
@@ -863,6 +932,7 @@ def build_report(repo: Path, base: Optional[str], only: frozenset[str], include_
     config, warnings, config_path = load_config(toplevel)
     base_ref = resolve_base(toplevel, base)
     snapshot, head = take_snapshot(toplevel, base_ref, config)
+    snapshot = without_excluded(snapshot, config)
     checks = plan(snapshot, config, only)
 
     results: list[Result] = []
