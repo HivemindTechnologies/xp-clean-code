@@ -293,6 +293,9 @@ class Judges(unittest.TestCase):
         result = tools.judge(self.planned("diff-cover"), tools.Run(0, "", "", report), {}, Config(fail_under=95))
         self.assertEqual(result.status, "FAIL")
 
+    def test_output_tail_drops_colour_codes(self) -> None:
+        self.assertEqual(tools.tail("\x1b[31m-old\x1b(B\x1b[m\n\x1b[32m+new\x1b[0m"), "-old\n+new")
+
     def test_unreadable_output_is_an_error(self) -> None:
         result = tools.judge(self.planned("semgrep"), tools.Run(0, "not json", "", None), {}, Config())
         self.assertEqual(result.status, "ERROR")
@@ -385,6 +388,20 @@ class EndToEnd(unittest.TestCase):
         _, report = self.run_tools("--only", "project")
         check = report["checks"][0]
         self.assertIn(check["status"], ("SKIPPED_SLOW", "NOT_RUN"))
+
+    @unittest.skipUnless(have("diff-cover"), "diff-cover not installed")
+    def test_coverage_ignores_uncommitted_lines(self) -> None:
+        self.commit({"a.py": "x = 1\ny = 2\n"})
+        lines = "".join(f'<line number="{n}" hits="{1 if n == 1 else 0}"/>' for n in (1, 2, 3))
+        (self.repo / "coverage.xml").write_text(
+            f'<?xml version="1.0" ?><coverage version="7" line-rate="0.3"><sources><source>{self.repo}</source>'
+            '</sources><packages><package name="."><classes><class name="a.py" filename="a.py" line-rate="0.3">'
+            f"<lines>{lines}</lines></class></classes></package></packages></coverage>")
+        (self.repo / "a.py").write_text("x = 1\ny = 2\nz = 3\n")  # line 3 is not committed
+        _, report = self.run_tools("--only", "coverage")
+        check = report["checks"][0]
+        self.assertEqual(check["status"], "FAIL", check)
+        self.assertEqual([finding["line"] for finding in check["findings"]], [2])
 
     def test_only_dirty_checked_files_are_noted(self) -> None:
         self.commit({"a.py": "x = 1\n", "notes.txt": "n\n"})

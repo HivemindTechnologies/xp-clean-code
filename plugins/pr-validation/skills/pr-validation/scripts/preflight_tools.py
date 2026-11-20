@@ -635,8 +635,12 @@ def parse_status_paths(porcelain: str) -> list[str]:
     return paths
 
 
+ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-9;?]*[A-Za-z]|\([A-Za-z0-9])")
+
+
 def tail(text: str, lines: int = OUTPUT_TAIL_LINES) -> str:
-    return "\n".join(text.rstrip().splitlines()[-lines:])
+    """The last lines of a tool's output, without terminal colour codes."""
+    return "\n".join(ANSI_ESCAPE.sub("", text).rstrip().splitlines()[-lines:])
 
 
 @dataclass(frozen=True)
