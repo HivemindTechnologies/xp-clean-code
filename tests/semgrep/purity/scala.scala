@@ -47,6 +47,9 @@ object Impure {
     total
   }
 
+  // ruleid: scala-var
+  private var cache: Map[String, Int] = Map.empty
+
   def countTyped(xs: List[Int]): Int = {
     // ruleid: scala-var
     var total: Int = 0
@@ -56,6 +59,21 @@ object Impure {
 }
 
 object Pure {
+  // ok: scala-var
+  val limit = 10
+
+  // ok: scala-var
+  val typed: Int = 10
+
+  def lines(path: String): List[String] = {
+    // ok: scala-var
+    val parsed: List[String] = List(path)
+    parsed
+  }
+
+  // ok: scala-var
+  val variance = 1 // a name that starts with "var"
+
   // ok: scala-clock
   def age(now: Instant, born: Instant): Long = now.getEpochSecond - born.getEpochSecond
 

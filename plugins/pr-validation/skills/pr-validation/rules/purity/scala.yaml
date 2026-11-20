@@ -57,6 +57,5 @@ rules:
     severity: INFO
     message: Mutable variable. Prefer a val and a new value over reassignment.
     metadata: {category: mutation}
-    pattern-either:
-      - pattern: var $X = $E
-      - pattern: "var $X: $T = $E"
+    # Semgrep's Scala patterns `var $X = $E` also match `val`, so match the keyword itself.
+    pattern-regex: (?m)^[ \t]*(?:(?:private|protected|override|final|implicit)(?:\[\w+\])?[ \t]+)*var[ \t]+[A-Za-z_]\w*
