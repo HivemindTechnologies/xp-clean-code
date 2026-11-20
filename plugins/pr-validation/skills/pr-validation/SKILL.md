@@ -5,7 +5,9 @@ description: >-
   coverage gaps, protection claims unsupported by removal checks, and spec
   drift. Use when asked to review or validate a PR, verify test coverage, check
   purity or idempotency, assess protection claims, or enforce a spec's scope
-  fence; do not use for ordinary implementation work.
+  fence; also use as a preflight before opening a pull request (gh pr create,
+  create_pull_request), or when a preflight gate hook denies one. Do not use
+  for ordinary implementation work.
 ---
 
 # PR Validation · Purity · Idempotency · BDD Coverage · Protection Claims · Spec Sync
@@ -21,6 +23,8 @@ The rules here are non-negotiable defaults. Deviate only when the user explicitl
 ## How to Run This Validation
 
 When the target is a GitHub pull request, read `references/github-pr-workflow.md` before obtaining inputs or running removal checks. A user-supplied diff does not require that workflow.
+
+**Preflight mode.** When you are about to open a pull request (the user asked for one, `/pr-preflight` ran, or the preflight gate hook denied `gh pr create`), the pull request does not exist yet. Read `references/preflight-workflow.md` instead: it takes the diff from the local branch and the title and body from the draft you are about to submit, then asks the user before recording the preflight and opening the pull request.
 
 1. Obtain the diff for the PR (changed files, hunks, line ranges) **and the PR body, title, and commit messages**. Analysis 4 validates the prose against the tests, and Analysis 5 reads the spec the body names.
 2. Identify every changed function, method, or procedure.
@@ -715,3 +719,4 @@ For language-specific impurity detection patterns, see `references/purity-checkl
 For worked examples of each coverage gap pattern, see `references/gap-patterns.md`.
 For the claim-to-mutation catalogue and worked removal checks, see `references/claim-verification.md`.
 For acquiring a GitHub pull request and safely isolating removal checks, see `references/github-pr-workflow.md`.
+For validating a branch and a draft before the pull request exists, see `references/preflight-workflow.md`.

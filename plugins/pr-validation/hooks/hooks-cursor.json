@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": "python3 ./hooks/pr_preflight_gate.py --host cursor",
+        "matcher": "gh\\s.*\\bpr\\s+(create|new)\\b",
+        "timeout": 15
+      }
+    ]
+  }
+}

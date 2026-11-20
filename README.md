@@ -74,6 +74,7 @@ Start a new Codex conversation after installation. Codex may select a skill auto
 ```text
 $xp-clean-code implement this feature
 $pr-validation validate PR 123
+$pr-validation run a preflight before opening this pull request
 $brainstorming turn this idea into an XP design brief
 $scaffolding scaffold the approved design
 $spec define the next fenced increment
@@ -151,12 +152,18 @@ plugins/pr-validation/                    # verifying what was built
 ├── .codex-plugin/
 │   └── plugin.json
 ├── commands/
-│   └── pr-validate.md                    # /pr-validate — five analyses adapter
+│   ├── pr-validate.md                    # /pr-validate — five analyses adapter
+│   └── pr-preflight.md                   # /pr-preflight — validate before opening a PR
+├── hooks/
+│   ├── hooks.json                        # Preflight gate for Claude Code and Codex
+│   ├── hooks-cursor.json                 # Preflight gate for Cursor
+│   └── pr_preflight_gate.py              # Denies PR creation until HEAD has a preflight
 └── skills/
     └── pr-validation/
         ├── SKILL.md                      # The five analyses — loaded on demand
         └── references/
             ├── github-pr-workflow.md     # Shared GitHub acquisition + isolated removal checks
+            ├── preflight-workflow.md     # Local branch + draft PR inputs; recording a preflight
             ├── purity-checklist.md       # Impurity signals + absence-vs-failure signals:
             │                             #   Python, Scala, Java, TypeScript, Rust
             ├── gap-patterns.md           # Eleven coverage gap patterns, with before/after scenarios
@@ -227,6 +234,12 @@ Validate the marketplace and keep the Claude Code, Cursor, and Codex manifest na
 python3 scripts/validate_manifests.py
 ```
 
+Run the tests for the hook scripts with:
+
+```bash
+python3 -m unittest discover -s tests
+```
+
 ### The `pr-validation` Plugin
 
 Where `xp-clean-code` governs how to build, `pr-validation` checks that what was built holds up. Run `/pr-validate` in Claude Code, invoke `$pr-validation` in Codex, or ask the agent to review a PR, and it produces a structured report across five analyses:
@@ -236,6 +249,20 @@ Where `xp-clean-code` governs how to build, `pr-validation` checks that what was
 1. **BDD coverage:** a coverage matrix mapping changed functions to scenarios: happy path, each failure mode, each branch, each boundary.
 1. **Protection claims:** for every assertion the PR body makes about what a check protects against, the mapped test is run with that protection removed. If it still passes, the claim is unsubstantiated: the guard is untested, unreachable, or the test passes for an unrelated reason. A protection claim nobody can break is a promise the suite does not keep.
 1. **Spec sync:** when a repository uses `docs/specs/`, every changed scenario must be authorised by the named spec and its Gherkin mirror must remain exact.
+
+#### Preflight Before Opening a Pull Request
+
+The same five analyses also run before a pull request exists. They take the diff from the local branch and the title and body from the draft the agent is about to submit, so an unsupported protection claim is removed before a reviewer reads it. Run `/pr-preflight` in Claude Code or Cursor, or `$pr-validation` with a preflight request in Codex (Codex plugins have no commands).
+
+The plugin also ships a hook that runs the preflight whenever an agent tries to open a pull request. When an agent runs `gh pr create` (or `gh pr new`, or calls an MCP `create_pull_request` tool in Claude Code and Codex), the hook checks for a preflight record for the commit at `HEAD`. If none exists, it denies the call and tells the agent to run the preflight. The agent shows you the report and asks whether to proceed. It records the preflight under `.git/pr-preflight/` only after you confirm, then opens the pull request. A new commit needs a new preflight.
+
+| Host | Hook | Notes |
+|---|---|---|
+| Claude Code | `hooks/hooks.json`, `PreToolUse` | Active once the plugin is enabled. |
+| Codex | `hooks/hooks.json`, `PreToolUse` (discovered by default) | Codex skips plugin hooks until you review and trust them with `/hooks`, and again after each change. |
+| Cursor | `hooks/hooks-cursor.json`, `beforeShellExecution` | Declared in the Cursor manifest. MCP tool calls are not gated. |
+
+The hook needs `python3` and `git` on the `PATH`. It fails open: outside a git repository, without git, or on unreadable input, the call proceeds. It does not see pull requests opened in a browser. To turn it off for one repository, run `git config pr-preflight.enabled false`.
 
 ### The `spec-driven` Plugin
 
