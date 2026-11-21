@@ -23,6 +23,16 @@ git log --format='%h %s' origin/<base>..HEAD
 
 If the remote base cannot be fetched, fall back to the local `<base>` branch and state that in the report.
 
+## Run the Deterministic Tools
+
+Run `scripts/preflight_tools.py` from this skill's directory, as `references/tooling.md` describes:
+
+1. Run it with `--plan` and the base branch. Show the user which checks would run, which are slow, and which cannot run and why.
+2. Run the fast checks. If the plan has slow checks, ask the user whether to run them too, and pass `--include-slow` only if they agree.
+3. Keep the markdown output for the **0 · Tooling** section of the report, and use the findings as evidence in the analyses: impurity signals in Analysis 1, uncovered changed lines in Analysis 3.
+
+A required check that failed, errored, or did not run makes the verdict FAIL. Never install a missing tool; report it and suggest the install command from `references/tooling.md`.
+
 ## Run the Analyses
 
 Run all five analyses as `SKILL.md` describes, with these substitutions:
@@ -37,7 +47,7 @@ Run all five analyses as `SKILL.md` describes, with these substitutions:
 
 The isolation rules in `github-pr-workflow.md` apply unchanged: never mutate the user's working tree, restore every mutation, remove the worktree afterwards, and ask before running a test command of unknown cost.
 
-Title the report **PR Preflight Report** instead of PR Validation Report, and name the commit it covers (`HEAD` short hash).
+Title the report **PR Preflight Report** instead of PR Validation Report, name the commit it covers (`HEAD` short hash), and put the **0 · Tooling** section before the five analyses.
 
 ## Decide with the User
 

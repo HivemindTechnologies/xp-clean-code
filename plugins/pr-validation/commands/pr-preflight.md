@@ -13,6 +13,6 @@ Base branch: `$ARGUMENTS`
 - If `$ARGUMENTS` is empty, use the repository's default branch.
 - Validate the commits on the current branch that are not on the base.
 
-Load and apply the **pr-validation** skill. Read and follow its `references/preflight-workflow.md`: assemble the draft title and body you would submit, run the five analyses (Purity, Idempotency, BDD Coverage, Protection Claims, Spec Sync) against the local branch and that draft, and produce the PR Preflight Report with a final verdict.
+Load and apply the **pr-validation** skill. Read and follow its `references/preflight-workflow.md`: assemble the draft title and body you would submit, run the deterministic tools (asking before any slow check), run the five analyses (Purity, Idempotency, BDD Coverage, Protection Claims, Spec Sync) against the local branch and that draft, and produce the PR Preflight Report with a final verdict.
 
 Then ask whether to open the pull request. Record the preflight and open it only if the user confirms.

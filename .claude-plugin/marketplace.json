@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "XP and clean code practices for Claude Code, Cursor, and Codex: how to build, how to validate it, how to decide what to build, and how to write about it",
-    "version": "1.5.0"
+    "version": "1.6.0"
   },
   "plugins": [
     {
