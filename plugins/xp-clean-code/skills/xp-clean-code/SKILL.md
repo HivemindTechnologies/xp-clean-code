@@ -176,7 +176,7 @@ Refactoring is the act of improving the structure of code **without changing its
 
 **What refactoring is NOT:**
 - Rewriting a working module because you would do it differently.
-- Cleaning up code you did not write as part of your current change.
+- Cleaning up code you did not write as part of your current change; keep changes surgical.
 - Doing a refactor and a feature in the same commit.
 
 ---
@@ -680,6 +680,21 @@ Apply this to every nullable or optional value, in order:
 Step 1 first, always: the cheapest optional to eliminate is the one that never needed to exist.
 
 For per-language idioms (boundary normalisation, ADT declaration, exhaustive elimination, and the conformance properties a hand-rolled result type must satisfy), see `references/total-types.md`.
+
+---
+
+## How the Practices Shape Behaviour
+
+The practices above also govern how you work, not only what the code looks like. Each behavioural principle below has a practice that enforces it:
+
+| Principle | How the practice enforces it |
+|---|---|
+| Clarify before acting | Write the BDD scenario first; it forces shared understanding before any code exists |
+| Minimal footprint | TDD enforces this mechanically: you cannot write code without a test that demands it |
+| Surgical changes | Refactor-as-separate-phase keeps structural improvements out of feature commits |
+| Goal-driven execution | Given/When/Then *is* the success criterion, made verifiable |
+| Do not assume | Ubiquitous language surfaces hidden assumptions: if the name is wrong, the model is wrong |
+| Avoid hidden state | Pure functions and immutability make all state explicit and traceable. Null is the most common hidden state of all: a type that claims a value exists when it may not |
 
 ---
 
