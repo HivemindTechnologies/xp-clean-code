@@ -1,0 +1,7 @@
+# Deterministic checks for the pr-validation preflight on this repository.
+# See plugins/pr-validation/skills/pr-validation/references/tooling.md.
+
+[checks]
+required = ["secrets"]
+# The purity rule fixtures are impure on purpose.
+exclude = ["tests/semgrep/**"]

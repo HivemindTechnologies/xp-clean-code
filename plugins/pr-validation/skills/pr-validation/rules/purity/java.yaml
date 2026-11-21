@@ -1,0 +1,67 @@
+# Impurity signals for Analysis 1 (Purity). Each finding is evidence for the
+# analysis to classify as Boundary or Violation; it is not a verdict on its own.
+# Mirrors references/purity-checklist.md, Java section.
+rules:
+  - id: java-clock
+    languages: [java]
+    severity: INFO
+    message: Clock read. The result depends on when this runs; pass the time or a Clock in, or keep this call at the boundary.
+    metadata: {category: clock}
+    pattern-either:
+      - pattern: System.currentTimeMillis()
+      - pattern: System.nanoTime()
+      - pattern: new Date()
+      - pattern: new java.util.Date()
+      - patterns:
+          - pattern: $T.now()
+          - metavariable-regex:
+              metavariable: $T
+              regex: ^(java\.time\.)?(Instant|LocalDateTime|LocalDate|LocalTime|ZonedDateTime|OffsetDateTime)$
+
+  - id: java-random
+    languages: [java]
+    severity: INFO
+    message: Random read. The result differs between runs; pass a seed or a generator in, or keep this call at the boundary.
+    metadata: {category: random}
+    pattern-either:
+      - pattern: Math.random()
+      - pattern: new Random(...)
+      - pattern: new java.util.Random(...)
+      - pattern: UUID.randomUUID()
+      - pattern: ThreadLocalRandom.current()
+
+  - id: java-environment
+    languages: [java]
+    severity: INFO
+    message: Environment read. Hidden input; pass configuration in as a value.
+    metadata: {category: environment}
+    pattern-either:
+      - pattern: System.getenv(...)
+      - pattern: System.getProperty(...)
+
+  - id: java-io
+    languages: [java]
+    severity: INFO
+    message: I/O. Acceptable at the boundary only.
+    metadata: {category: io}
+    pattern-either:
+      - pattern: System.out.$F(...)
+      - pattern: System.err.$F(...)
+      - pattern: Files.$F(...)
+      - pattern: new FileReader(...)
+      - pattern: new FileWriter(...)
+      - pattern: new FileInputStream(...)
+      - pattern: new FileOutputStream(...)
+      - pattern: HttpClient.newHttpClient()
+
+  - id: java-static-mutable-field
+    languages: [java]
+    severity: INFO
+    message: Static field that is not final. Shared mutable state.
+    metadata: {category: mutation}
+    patterns:
+      - pattern-either:
+          - pattern: static $TYPE $NAME = $INIT;
+          - pattern: static $TYPE $NAME;
+      - pattern-not: static final $TYPE $NAME = $INIT;
+      - pattern-not: static final $TYPE $NAME;

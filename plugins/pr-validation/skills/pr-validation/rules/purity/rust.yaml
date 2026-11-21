@@ -1,0 +1,117 @@
+# Impurity signals for Analysis 1 (Purity). Each finding is evidence for the
+# analysis to classify as Boundary or Violation; it is not a verdict on its own.
+# Mirrors references/purity-checklist.md, Rust section.
+#
+# Inline unit tests are not production code. Semgrep cannot match an attribute on
+# a module, so test modules are recognised by their conventional names (tests,
+# test, testing) and test functions by #[test]. A #[cfg(test)] module with any
+# other name is still scanned.
+rules:
+  - id: rust-clock
+    languages: [rust]
+    severity: INFO
+    message: Clock read. The result depends on when this runs; pass the time in, or keep this call at the boundary.
+    metadata: {category: clock}
+    patterns:
+      - pattern-either:
+          - pattern: SystemTime::now()
+          - pattern: std::time::SystemTime::now()
+          - pattern: Instant::now()
+          - pattern: std::time::Instant::now()
+          - pattern: Utc::now()
+          - pattern: chrono::Utc::now()
+          - pattern: Local::now()
+          - pattern: chrono::Local::now()
+      - pattern-not-inside: "mod tests { ... }"
+      - pattern-not-inside: "mod test { ... }"
+      - pattern-not-inside: "mod testing { ... }"
+      - pattern-not-inside: |
+          #[test]
+          fn $TEST(...) { ... }
+
+  - id: rust-random
+    languages: [rust]
+    severity: INFO
+    message: Random read. The result differs between runs; pass an Rng in, or keep this call at the boundary.
+    metadata: {category: random}
+    patterns:
+      - pattern-either:
+          - pattern: rand::random(...)
+          - pattern: rand::random::<$T>(...)
+          - pattern: rand::thread_rng()
+          - pattern: thread_rng()
+          - pattern: rand::rng()
+          - pattern: Uuid::new_v4()
+          - pattern: uuid::Uuid::new_v4()
+      - pattern-not-inside: "mod tests { ... }"
+      - pattern-not-inside: "mod test { ... }"
+      - pattern-not-inside: "mod testing { ... }"
+      - pattern-not-inside: |
+          #[test]
+          fn $TEST(...) { ... }
+
+  - id: rust-environment
+    languages: [rust]
+    severity: INFO
+    message: Environment read. Hidden input; pass configuration in as a value.
+    metadata: {category: environment}
+    patterns:
+      - pattern-either:
+          - pattern: std::env::var(...)
+          - pattern: env::var(...)
+          - pattern: std::env::vars()
+          - pattern: env::vars()
+          - pattern: std::env::args()
+          - pattern: env::args()
+      - pattern-not-inside: "mod tests { ... }"
+      - pattern-not-inside: "mod test { ... }"
+      - pattern-not-inside: "mod testing { ... }"
+      - pattern-not-inside: |
+          #[test]
+          fn $TEST(...) { ... }
+
+  - id: rust-io
+    languages: [rust]
+    severity: INFO
+    message: I/O. Acceptable at the boundary only.
+    metadata: {category: io}
+    patterns:
+      - pattern-either:
+          - pattern: std::fs::$F(...)
+          - pattern: fs::$F(...)
+          - pattern: File::open(...)
+          - pattern: File::create(...)
+          - pattern: println!(...)
+          - pattern: print!(...)
+          - pattern: eprintln!(...)
+          - pattern: dbg!(...)
+      - pattern-not-inside: "mod tests { ... }"
+      - pattern-not-inside: "mod test { ... }"
+      - pattern-not-inside: "mod testing { ... }"
+      - pattern-not-inside: |
+          #[test]
+          fn $TEST(...) { ... }
+
+  - id: rust-global-mutation
+    languages: [rust]
+    severity: INFO
+    message: Mutable static. Shared mutable state that the signature cannot show.
+    metadata: {category: mutation}
+    pattern: "static mut $X: $T = $E;"
+
+  - id: rust-panic
+    languages: [rust]
+    severity: INFO
+    message: Panic path. A hidden effect the signature denies; return a Result or an Option instead, unless the case is truly unreachable.
+    metadata: {category: panic}
+    patterns:
+      - pattern-either:
+          - pattern: $X.unwrap()
+          - pattern: $X.expect(...)
+          - pattern: panic!(...)
+      - pattern-not-inside: "mod tests { ... }"
+      - pattern-not-inside: "mod test { ... }"
+      - pattern-not-inside: "mod testing { ... }"
+      - pattern-not-inside: |
+          #[test]
+          fn $TEST(...) { ... }

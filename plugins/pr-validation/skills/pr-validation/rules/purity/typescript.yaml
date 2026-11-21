@@ -1,0 +1,42 @@
+# Impurity signals for Analysis 1 (Purity). Each finding is evidence for the
+# analysis to classify as Boundary or Violation; it is not a verdict on its own.
+# Mirrors references/purity-checklist.md, TypeScript section.
+rules:
+  - id: typescript-clock
+    languages: [typescript]
+    severity: INFO
+    message: Clock read. The result depends on when this runs; pass the time in, or keep this call at the boundary.
+    metadata: {category: clock}
+    pattern-either:
+      - pattern: Date.now()
+      - pattern: new Date()
+      - pattern: performance.now()
+
+  - id: typescript-random
+    languages: [typescript]
+    severity: INFO
+    message: Random read. The result differs between runs; pass a generator in, or keep this call at the boundary.
+    metadata: {category: random}
+    pattern-either:
+      - pattern: Math.random()
+      - pattern: crypto.randomUUID()
+      - pattern: crypto.getRandomValues(...)
+
+  - id: typescript-environment
+    languages: [typescript]
+    severity: INFO
+    message: Environment read. Hidden input; pass configuration in as a value.
+    metadata: {category: environment}
+    pattern: process.env
+
+  - id: typescript-io
+    languages: [typescript]
+    severity: INFO
+    message: I/O. Acceptable at the boundary only.
+    metadata: {category: io}
+    pattern-either:
+      - pattern: fetch(...)
+      - pattern: axios.$F(...)
+      - pattern: fs.$F(...)
+      - pattern: fs.promises.$F(...)
+      - pattern: console.$F(...)
