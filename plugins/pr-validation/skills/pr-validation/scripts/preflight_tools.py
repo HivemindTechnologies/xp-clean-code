@@ -481,7 +481,9 @@ NATIVE_CHECKS: tuple[NativeCheck, ...] = (
                 lambda root, files, mb: ("sbt", "-batch", "scalafmtCheckAll")),
     NativeCheck("project:scalafix", "scala", "sbt", "slow", ("build.sbt",),
                 _has_up((".scalafix.conf",)),
-                lambda root, files, mb: ("sbt", "-batch", "scalafixAll --check")),
+                # scalafixEnable turns on SemanticDB for this session, which semantic rules
+                # such as OrganizeImports need when the build does not enable it itself.
+                lambda root, files, mb: ("sbt", "-batch", "scalafixEnable", "scalafixAll --check")),
     NativeCheck("project:spotless-gradle", "jvm", "gradle", "slow", GRADLE_FILES,
                 _mentions("spotless"), lambda root, files, mb: ("./gradlew", "spotlessCheck", "--quiet")),
     NativeCheck("project:checkstyle-gradle", "jvm", "gradle", "slow", GRADLE_FILES,

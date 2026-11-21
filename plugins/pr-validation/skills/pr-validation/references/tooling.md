@@ -28,7 +28,7 @@ Exit status: 0 when no required check failed, 1 when one did, 2 when the runner 
 | `coverage` | diff-cover | Analysis 3 | Changed lines that no test executed, from a coverage report the project already produced. |
 | `complexity` | lizard | Clean Code | Changed functions above the cyclomatic complexity limit (default 10). |
 | `duplication` | jscpd | Clean Code | Clones of at least 50 tokens where one side touches a changed line. The whole repository is searched for the other side. |
-| `purity` | semgrep | Analysis 1 | Impurity signals on changed lines in Scala, Python, Rust, Java and TypeScript, from the rules in `rules/purity/`. |
+| `purity` | semgrep | Analysis 1 | Impurity signals on changed lines of production code in Scala, Python, Rust, Java and TypeScript, from the rules in `rules/purity/`. Test code is skipped (see below). |
 | `project:*` | the project's own | Avoiding a failed CI run | `pre-commit run` over the branch when `.pre-commit-config.yaml` exists, in a disposable worktree because hooks may rewrite files. Otherwise the checks below, each only where the project configures its tool. |
 
 Project checks detected without pre-commit:
@@ -40,13 +40,23 @@ Project checks detected without pre-commit:
 | Scala | | `sbt scalafmtCheckAll`, `sbt "scalafixAll --check"` | `build.sbt` with `.scalafmt.conf` / `.scalafix.conf` |
 | Java, Kotlin (Gradle) | | `spotlessCheck`, `checkstyleMain`, `detekt`, `ktlintCheck` | the plugin named in `build.gradle(.kts)`, and a `./gradlew` wrapper |
 | Java (Maven) | | `spotless:check`, `checkstyle:check` | the plugin named in `pom.xml` |
-| TypeScript | `eslint`, `biome ci` | `tsc --noEmit` | the tool's config file and its binary in `node_modules/.bin` |
+| TypeScript | `eslint`, `biome ci` | `tsc --noEmit` | the tool's config file; run through `npx --no-install`, so binaries hoisted to a parent `node_modules` work |
 | Go | `gofmt -l` | `go vet ./...`, `golangci-lint run --new-from-rev` | `go.mod`; `.golangci.*` |
 | C++ | `clang-format --dry-run --Werror` | | `.clang-format` |
 
 Each check runs from the nearest directory with the language's build file, so monorepos with several projects get one check per project (`project:ruff-check@services/api`).
 
-The runner does not compile code to run compiler-integrated checks such as Error Prone or WartRemover. They run in the project's build; include them in CI.
+A tool whose configuration exists but whose binary does not, such as ESLint without `node_modules`, is reported as NOT_RUN with the install command, never left out. Installing may need credentials for a private registry; the runner never handles them.
+
+The runner does not compile code to run compiler-integrated checks such as Error Prone or WartRemover, and it does not detect checks that a project runs only from a `Makefile` or a package script without a configuration file. They run in the project's build; include them in CI, or in pre-commit so the runner finds them.
+
+## Test Code and Purity
+
+Tests may read files, print, and panic freely, so the purity check skips them: `test/`, `tests/`, `__tests__/`, `src/test/`, `src/it/`, `fixtures/` and `testdata/` directories, `test_*.py`, `conftest.py`, `*_test.py|go|rs`, `*.spec.ts`, `*.test.ts`, and JVM classes ending in `Test`, `Tests`, `Spec`, `Suite` or `IT`.
+
+Rust keeps unit tests inline. Semgrep cannot match an attribute on a module, so the Rust rules skip modules named `tests`, `test` or `testing` and functions marked `#[test]`. A `#[cfg(test)]` module with another name is still scanned; its findings are test code, not violations.
+
+Complexity and duplication still cover tests: a test too complex to read, or copied wholesale, is worth knowing about.
 
 ## Statuses
 

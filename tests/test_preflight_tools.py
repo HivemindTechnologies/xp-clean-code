@@ -234,6 +234,11 @@ class PlansProjectChecks(unittest.TestCase):
         self.assertEqual(checks["project:scalafmt@core"].argv, ("sbt", "-batch", "scalafmtCheckAll"))
         self.assertNotIn("project:scalafix@core", checks)
 
+    def test_scalafix_enables_semanticdb_first(self) -> None:
+        directories = {"": Directory(frozenset({"build.sbt", ".scalafix.conf"}))}
+        check = by_id(tools.plan(snapshot({"A.scala": {1}}, directories), Config()))["project:scalafix"]
+        self.assertEqual(check.argv, ("sbt", "-batch", "scalafixEnable", "scalafixAll --check"))
+
     def test_gofmt_lists_files(self) -> None:
         directories = {"": Directory(frozenset({"go.mod"}))}
         check = by_id(tools.plan(snapshot({"main.go": {1}}, directories), Config()))["project:gofmt"]
