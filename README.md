@@ -33,11 +33,10 @@ It encodes eight principles:
 
 Requires a Cursor Teams or Enterprise plan and admin access.
 
-1. Push these changes so `main` includes `.cursor-plugin/marketplace.json`.
-2. Open **Dashboard → Settings → Plugins**.
-3. Under **Team Marketplaces**, choose **Import Marketplace** / **Import from Repo**.
-4. Paste: `https://github.com/HivemindTechnologies/xp-clean-code`
-5. Confirm the four plugins (`xp-clean-code`, `pr-validation`, `spec-driven`, `prose-style`) are detected, then save.
+1. Open **Dashboard → Settings → Plugins**.
+2. Under **Team Marketplaces**, choose **Import Marketplace** / **Import from Repo**.
+3. Paste: `https://github.com/HivemindTechnologies/xp-clean-code`
+4. Confirm the four plugins (`xp-clean-code`, `pr-validation`, `spec-driven`, `prose-style`) are detected, then save.
 
 For private repos, install the Cursor GitHub App on the org/repo first (**Dashboard → Integrations**). Enable **Auto Refresh** if you want pushes to re-index the marketplace.
 
@@ -55,7 +54,7 @@ for s in prose-style revise; do
 done
 ```
 
-Or load a plugin from `~/.cursor/plugins/local/` (symlink a plugin directory that contains `.cursor-plugin/plugin.json`).
+Symlinked skills bring no commands and no hooks, so the `pr-validation` preflight gate stays inactive. To get both, load a plugin from `~/.cursor/plugins/local/` instead (symlink a plugin directory that contains `.cursor-plugin/plugin.json`).
 
 ### Codex
 
@@ -83,7 +82,7 @@ $prose-style write the release notes for this version
 $revise README.md
 ```
 
-Run `/skills` in Codex CLI or the IDE extension to browse installed skills.
+Run `/skills` in Codex CLI or the IDE extension to browse installed skills. Codex runs the `pr-validation` preflight gate only after you review and trust its hook with `/hooks`.
 
 ### Claude Code
 
@@ -126,6 +125,11 @@ curl https://raw.githubusercontent.com/HivemindTechnologies/xp-clean-code/main/p
 └── marketplace.json                      # Claude Code marketplace index
 scripts/
 └── validate_manifests.py                 # Cross-host name/version consistency check
+tests/
+├── test_pr_preflight_gate.py             # The preflight gate hook
+├── test_preflight_tools.py               # The deterministic tooling runner
+└── semgrep/purity/                       # Annotated fixtures for the purity rules
+.pr-preflight.toml                        # This repository's own preflight configuration
 
 plugins/xp-clean-code/                    # how to build
 ├── .cursor-plugin/
@@ -239,11 +243,14 @@ Validate the marketplace and keep the Claude Code, Cursor, and Codex manifest na
 python3 scripts/validate_manifests.py
 ```
 
-Run the tests for the hook scripts with:
+Run the tests for the preflight gate and the tooling runner, and the purity rules against their fixtures, with:
 
 ```bash
 python3 -m unittest discover -s tests
+semgrep --test --config plugins/pr-validation/skills/pr-validation/rules/purity tests/semgrep/purity
 ```
+
+Integration tests skip when the tool they need is not installed.
 
 ### The `pr-validation` Plugin
 
@@ -279,9 +286,11 @@ The preflight also runs tools whose findings feed the analyses, reported in a **
 | Coverage of changed lines | diff-cover, on a report the project produced | Analysis 3 |
 | Impurity signals | semgrep, with rules shipped for Scala, Python, Rust, Java and TypeScript | Analysis 1 |
 | Complexity, duplication | lizard, jscpd | Clean Code |
-| The project's own checks | pre-commit, or ruff, mypy, cargo, sbt, Gradle, Maven, ESLint, tsc, gofmt, golangci-lint, clang-format where configured | avoiding a failed CI run |
+| The project's own checks | pre-commit, or ruff, mypy, pyright, cargo, sbt, Gradle, Maven, ESLint, Biome, tsc, gofmt, go vet, golangci-lint, clang-format where configured | avoiding a failed CI run |
 
-All checks are advisory until `.pr-preflight.toml` makes them required. Missing tools are reported, never installed; slow checks run only after you agree. See [`references/tooling.md`](plugins/pr-validation/skills/pr-validation/references/tooling.md) for the configuration, the per-language detection, and how to produce coverage reports.
+Scala, Python, Rust, Java and TypeScript get every check. Kotlin, Go and C++ get every check except purity, which has no rules for them yet.
+
+All checks are advisory until `.pr-preflight.toml` makes them required. Reading that file needs Python 3.11 or later; on older versions the runner warns and uses the defaults. It never installs a tool, never runs the test suite, and never changes the working tree: a missing tool, or one that is configured but absent from `node_modules`, is reported as NOT_RUN with the reason. Slow checks run only after you agree. See [`references/tooling.md`](plugins/pr-validation/skills/pr-validation/references/tooling.md) for the configuration, the per-language detection, and how to produce coverage reports.
 
 ### The `spec-driven` Plugin
 
@@ -331,12 +340,6 @@ Sources: William Strunk Jr.'s *The Elements of Style* (1918, public domain), obr
 [the-elements-of-style](https://github.com/obra/the-elements-of-style), and
 [agent-style](https://github.com/yzhao062/agent-style) by Yue Zhao (CC BY 4.0). The agent-style
 rule set and its `style-review` skill shaped both skills here; the wording is our own.
-
------
-
-## Works Well With
-
-These plugins cover *how to build*, *how to check it*, *what to build*, and *how to write about it*. To also constrain *how to reason* (surface assumptions, avoid over-complication, make surgical changes), pair them with [andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills). The two address different failure modes and do not overlap.
 
 -----
 
