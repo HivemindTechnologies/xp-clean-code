@@ -461,8 +461,8 @@ class EndToEnd(unittest.TestCase):
 
     def test_only_source_files_are_diffed(self) -> None:
         self.commit({"src/deep/a.py": "x = 1\n", "A.JAVA": "class A {}\n", "data/results.json": "{}\n" * 1000})
-        _, report = self.run_tools("--plan")
-        self.assertEqual(report["languages"], {"java": ["A.JAVA"], "python": ["src/deep/a.py"]})
+        snapshot_taken, _ = tools.take_snapshot(self.repo, "main", Config())
+        self.assertEqual(set(snapshot_taken.changed), {"A.JAVA", "src/deep/a.py"})
 
     def test_only_dirty_checked_files_are_noted(self) -> None:
         self.commit({"a.py": "x = 1\n", "notes.txt": "n\n"})
