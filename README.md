@@ -266,7 +266,7 @@ Where `xp-clean-code` governs how to build, `pr-validation` checks that what was
 
 The same five analyses also run before a pull request exists. They take the diff from the local branch and the title and body from the draft the agent is about to submit, so an unsupported protection claim is removed before a reviewer reads it. Run `/pr-preflight` in Claude Code or Cursor, or `$pr-validation` with a preflight request in Codex (Codex plugins have no commands).
 
-The plugin also ships a hook that runs the preflight whenever an agent tries to open a pull request. When an agent runs `gh pr create` (or `gh pr new`, or calls an MCP `create_pull_request` tool in Claude Code and Codex), the hook checks for a preflight record for the commit at `HEAD`. If none exists, it denies the call and tells the agent to run the preflight. The agent shows you the report and asks whether to proceed. It records the preflight under `.git/pr-preflight/` only after you confirm, then opens the pull request. A new commit needs a new preflight.
+The plugin also ships a hook that runs the preflight whenever an agent tries to open a pull request. When an agent runs `gh pr create` (or `gh pr new`, or calls an MCP `create_pull_request` tool in Claude Code and Codex), the hook checks for a preflight record for the commit at `HEAD`. If none exists, it denies the call and tells the agent to run the preflight. The agent shows you the report and asks whether to proceed. It records the preflight under `.git/pr-preflight/` only after you confirm, then opens the pull request. A new commit needs a new preflight. The hook checks the repository the command runs in, following any `cd` earlier in the same command.
 
 | Host | Hook | Notes |
 |---|---|---|
