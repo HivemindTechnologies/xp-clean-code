@@ -70,7 +70,7 @@ marker="$(git rev-parse --path-format=absolute --git-path pr-preflight)/$(git re
   && printf 'verdict=%s\nconfirmed=%s\n' "<PASS|FAIL>" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$marker"
 ```
 
-The record lives under `.git/`, so it is never committed, and it is per worktree. Then create the pull request with the exact title and body you validated.
+Run it in the repository the pull request comes from. The record lives under `.git/`, so it is never committed, and it is per worktree. Then create the pull request with the exact title and body you validated, in a separate command: the hook checks before any part of a command runs, so a record written earlier in the same command is not yet there.
 
 Never record a preflight you did not run, and never write the record to get past the gate without the user's confirmation. Never set `pr-preflight.enabled` yourself: turning the gate off is the user's decision.
 
@@ -81,6 +81,10 @@ The plugin ships a hook for Claude Code, Codex and Cursor that intercepts pull r
 - Claude Code and Codex: `PreToolUse` on `Bash` commands running `gh pr create` or `gh pr new`, and on MCP tools named `*create_pull_request`.
 - Cursor: `beforeShellExecution` on the same `gh` commands. Cursor MCP tool calls are not gated.
 
-When no record exists for `HEAD`, the hook denies the call and points here. The hook fails open (no repository, no git, unreadable input), and it cannot see pull requests opened in a browser or by other tools. It is a reminder with teeth, not an enforcement boundary.
+When no record exists for `HEAD`, the hook denies the call and points here.
+
+The hook checks the repository the command runs in: the session's directory, followed through any `cd` or `pushd` earlier in the same command, so `cd ../other && gh pr create` is checked against `../other`. When a `cd` takes a path the hook cannot resolve (a variable, a command substitution, `cd -`), it denies the call and asks for a literal path. An MCP tool call is checked against the session's directory, and `gh -R owner/repo` is not compared with the local clone.
+
+The hook fails open (no repository, no git, unreadable input), and it cannot see pull requests opened in a browser or by other tools. It is a reminder with teeth, not an enforcement boundary.
 
 A user can turn the gate off for one repository with `git config pr-preflight.enabled false`.
