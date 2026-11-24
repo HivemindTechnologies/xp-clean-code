@@ -93,6 +93,37 @@ def validate_codex_marketplace(plugin_names: tuple[str, ...]) -> list[str]:
     return errors
 
 
+MARKETPLACES = {
+    "Claude Code": ".claude-plugin/marketplace.json",
+    "Cursor": ".cursor-plugin/marketplace.json",
+}
+
+
+def marketplace_version(relative_path: str) -> object:
+    metadata = load_json(REPOSITORY_ROOT / relative_path).get("metadata")
+    return metadata.get("version") if isinstance(metadata, dict) else None
+
+
+def validate_opencode_package() -> list[str]:
+    """opencode installs the whole repository as one package, versioned with the marketplaces."""
+    package_path = REPOSITORY_ROOT / "package.json"
+    try:
+        package = load_json(package_path)
+        versions = {host: marketplace_version(path) for host, path in MARKETPLACES.items()}
+    except (OSError, json.JSONDecodeError) as error:
+        return [f"{package_path}: {error}"]
+
+    errors: list[str] = []
+    main_file = package.get("main")
+    if not isinstance(main_file, str) or not (REPOSITORY_ROOT / main_file).is_file():
+        errors.append(f"{package_path}: main must name an existing file, found {main_file!r}")
+    versions["opencode"] = package.get("version")
+    if len(set(versions.values())) > 1:
+        rendered_versions = ", ".join(f"{host}={version!r}" for host, version in versions.items())
+        errors.append(f"marketplace versions differ: {rendered_versions}")
+    return errors
+
+
 def main() -> int:
     names = plugin_names()
     errors = [
@@ -101,6 +132,7 @@ def main() -> int:
         for error in validate_plugin(plugin_name)
     ]
     errors.extend(validate_codex_marketplace(names))
+    errors.extend(validate_opencode_package())
 
     if errors:
         print("Manifest validation failed:", file=sys.stderr)
@@ -108,7 +140,7 @@ def main() -> int:
             print(f"- {error}", file=sys.stderr)
         return 1
 
-    print("Manifest validation passed for Claude Code, Cursor, and Codex.")
+    print("Manifest validation passed for Claude Code, Cursor, Codex, and opencode.")
     return 0
 
 

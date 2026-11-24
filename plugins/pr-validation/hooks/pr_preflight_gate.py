@@ -15,6 +15,8 @@ request for a literal path.
 Hosts:
   --host claude   Claude Code and Codex (PreToolUse, hookSpecificOutput)
   --host cursor   Cursor (beforeShellExecution, permission response)
+  --host opencode opencode, through the plugin in opencode/ (tool.execute.before;
+                  a JSON deny on stdout, nothing to allow)
 
 The gate fails open: when the payload is unreadable, the directory is not a git
 repository, or git is unavailable, the call proceeds. It is a guardrail, not an
@@ -33,7 +35,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Literal, Optional, Union
 
-Host = Literal["claude", "cursor"]
+Host = Literal["claude", "cursor", "opencode"]
+HOSTS: tuple[Host, ...] = ("claude", "cursor", "opencode")
 
 MARKER_DIRECTORY = "pr-preflight"
 
@@ -44,6 +47,8 @@ PR_CREATE_COMMAND = re.compile(
     r"(?:^|[\s;&|(`])gh(?:\s+(?:-R|--repo)\s+\S+|\s+--repo=\S+)*\s+pr\s+(?:create|new)(?=[\s;&|)]|$)"
 )
 PR_CREATE_MCP_TOOL = re.compile(r"(?:^|__)create_pull_request$")
+# opencode names an MCP tool `<server>_<tool>`, with a single underscore.
+PR_CREATE_OPENCODE_TOOL = re.compile(r"(?:^|_)create_pull_request$")
 
 # Where one shell command ends and the next begins, for following `cd` through
 # a chain such as `cd ../other && git push && gh pr create`.
@@ -210,10 +215,32 @@ def intercept_tool_call(payload: dict[str, object], home: str) -> Intercepted:
     return Unrelated()
 
 
+def bash_directory(directory: str, workdir: object) -> str:
+    """Where opencode runs a bash call: its `workdir`, resolved against the session's directory."""
+    if not isinstance(workdir, str) or not workdir:
+        return directory
+    return posixpath.normpath(posixpath.join(directory, workdir))
+
+
+def intercept_opencode(payload: dict[str, object], home: str) -> Intercepted:
+    directory = str(payload.get("directory") or "")
+    tool = str(payload.get("tool") or "")
+    args = payload.get("args")
+    args = args if isinstance(args, dict) else {}
+    command = command_text(args.get("command"))
+    if tool == "bash" and is_pr_creation_command(command):
+        return located(command, bash_directory(directory, args.get("workdir")), home)
+    if tool != "bash" and PR_CREATE_OPENCODE_TOOL.search(tool):
+        return PrCreation(directory)
+    return Unrelated()
+
+
 def intercept(host: Host, payload: dict[str, object], home: str = "") -> Intercepted:
     """Classify a hook payload as a pull request creation, and find the repository it runs in."""
     if host == "cursor":
         return intercept_cursor(payload, home)
+    if host == "opencode":
+        return intercept_opencode(payload, home)
     return intercept_tool_call(payload, home)
 
 
@@ -231,20 +258,20 @@ def decide(state: RepositoryState) -> Decision:
     return Deny(DENY_REASON.format(head=state.head[:12]))
 
 
-def render(host: Host, decision: Decision) -> str:
-    """The hook's stdout. Empty means no opinion: the host's normal flow applies."""
-    if host == "cursor":
-        if isinstance(decision, Deny):
-            return json.dumps(
-                {
-                    "continue": True,
-                    "permission": "deny",
-                    "user_message": USER_MESSAGE,
-                    "agent_message": decision.reason,
-                }
-            )
-        return json.dumps({"continue": True, "permission": "allow"})
+def render_cursor(decision: Decision) -> str:
+    if isinstance(decision, Deny):
+        return json.dumps(
+            {
+                "continue": True,
+                "permission": "deny",
+                "user_message": USER_MESSAGE,
+                "agent_message": decision.reason,
+            }
+        )
+    return json.dumps({"continue": True, "permission": "allow"})
 
+
+def render_claude(decision: Decision) -> str:
     if isinstance(decision, Deny):
         return json.dumps(
             {
@@ -256,6 +283,25 @@ def render(host: Host, decision: Decision) -> str:
             }
         )
     return ""
+
+
+def render_opencode(decision: Decision) -> str:
+    """The plugin throws the reason, which blocks the call and shows the reason to the model."""
+    if isinstance(decision, Deny):
+        return json.dumps({"permission": "deny", "reason": decision.reason})
+    return ""
+
+
+RENDERERS: dict[Host, Callable[[Decision], str]] = {
+    "claude": render_claude,
+    "cursor": render_cursor,
+    "opencode": render_opencode,
+}
+
+
+def render(host: Host, decision: Decision) -> str:
+    """The hook's stdout. Empty means no opinion: the host's normal flow applies."""
+    return RENDERERS[host](decision)
 
 
 # ---------------------------------------------------------------------------
@@ -307,8 +353,9 @@ def read_repository_state(cwd: str) -> RepositoryState:
 def parse_host(arguments: list[str]) -> Host:
     if "--host" in arguments:
         index = arguments.index("--host")
-        if index + 1 < len(arguments) and arguments[index + 1] == "cursor":
-            return "cursor"
+        for host in HOSTS:
+            if index + 1 < len(arguments) and arguments[index + 1] == host:
+                return host
     return "claude"
 
 

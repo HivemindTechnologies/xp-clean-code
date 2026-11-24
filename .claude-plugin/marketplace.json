@@ -5,8 +5,8 @@
     "email": "info@hivemindtechnologies.com"
   },
   "metadata": {
-    "description": "XP and clean code practices for Claude Code, Cursor, and Codex: how to build, how to validate it, how to decide what to build, and how to write about it",
-    "version": "1.6.1"
+    "description": "XP and clean code practices for Claude Code, Cursor, Codex, and opencode: how to build, how to validate it, how to decide what to build, and how to write about it",
+    "version": "1.7.0"
   },
   "plugins": [
     {

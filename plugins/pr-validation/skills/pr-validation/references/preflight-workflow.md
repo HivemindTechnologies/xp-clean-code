@@ -80,6 +80,7 @@ The plugin ships a hook for Claude Code, Codex and Cursor that intercepts pull r
 
 - Claude Code and Codex: `PreToolUse` on `Bash` commands running `gh pr create` or `gh pr new`, and on MCP tools named `*create_pull_request`.
 - Cursor: `beforeShellExecution` on the same `gh` commands. Cursor MCP tool calls are not gated.
+- opencode: `tool.execute.before` in the repository's opencode plugin, on `bash` calls running the same `gh` commands (from the call's `workdir`), and on MCP tools named `*_create_pull_request`. The denial reaches the agent as the tool's error.
 
 When no record exists for `HEAD`, the hook denies the call and points here.
 
