@@ -1,6 +1,6 @@
 # xp-clean-code
 
-Plugins that bring Extreme Programming and Clean Code discipline to AI-assisted development: one for building code, one for validating that a pull request lives up to it, one for deciding *what* gets built (a spec-driven workflow grounded in XP rather than in big design up front), and one for the prose written around all three. Works with **Claude Code**, **Cursor** (Team Marketplace), and **Codex**.
+Plugins that bring Extreme Programming and Clean Code discipline to AI-assisted development: one for building code, one for validating that a pull request lives up to it, one for deciding *what* gets built (a spec-driven workflow grounded in XP rather than in big design up front), and one for the prose written around all three. Works with **Claude Code**, **Cursor** (Team Marketplace), **Codex**, and **opencode**.
 
 -----
 
@@ -112,6 +112,26 @@ echo "" >> CLAUDE.md
 curl https://raw.githubusercontent.com/HivemindTechnologies/xp-clean-code/main/plugins/xp-clean-code/skills/xp-clean-code/SKILL.md >> CLAUDE.md
 ```
 
+### opencode
+
+opencode has no plugin marketplace, so the repository installs as a single opencode plugin that registers the skills and commands of all four plugins, and the `pr-validation` preflight gate:
+
+```bash
+opencode plugin -g 'git+https://github.com/HivemindTechnologies/xp-clean-code.git#main'
+```
+
+`-g` installs it for every project; leave it out to install it for the current project only. To register only some of the plugins, give the entry options in `opencode.json`:
+
+```json
+{
+  "plugin": [
+    ["git+https://github.com/HivemindTechnologies/xp-clean-code.git#main", { "plugins": ["pr-validation", "prose-style"] }]
+  ]
+}
+```
+
+Restart opencode after installing. The skills load on demand or with `@skill-name`, and the commands run as `/pr-preflight`, `/revise`, `/spec` and so on. The plugin runs inside opencode; the gate needs `python3` and `git` on the `PATH`. It was tested with opencode 1.19.6.
+
 -----
 
 ## What Is Included
@@ -123,11 +143,17 @@ curl https://raw.githubusercontent.com/HivemindTechnologies/xp-clean-code/main/p
 └── marketplace.json                      # Cursor Team Marketplace index
 .claude-plugin/
 └── marketplace.json                      # Claude Code marketplace index
+package.json                              # opencode package: the whole repository as one plugin
+opencode/
+├── index.js                              # opencode plugin: registers skills, commands and the gate
+└── core.js                               # Its logic, tested without opencode
 scripts/
 └── validate_manifests.py                 # Cross-host name/version consistency check
 tests/
 ├── test_pr_preflight_gate.py             # The preflight gate hook
 ├── test_preflight_tools.py               # The deterministic tooling runner
+├── test_opencode_plugin.py               # The opencode plugin, loaded into opencode when installed
+├── opencode/                             # Node tests for opencode/core.js
 └── semgrep/purity/                       # Annotated fixtures for the purity rules
 .pr-preflight.toml                        # This repository's own preflight configuration
 
@@ -237,20 +263,20 @@ plugins/prose-style/                      # writing about it
 
 The reference files are loaded on demand. `SKILL.md` stays lean in context; the detail is there when the agent needs it.
 
-Validate the marketplace and keep the Claude Code, Cursor, and Codex manifest names and versions aligned with:
+Validate the marketplace and keep the Claude Code, Cursor, and Codex manifest names and versions, and the opencode package version, aligned with:
 
 ```bash
 python3 scripts/validate_manifests.py
 ```
 
-Run the tests for the preflight gate and the tooling runner, and the purity rules against their fixtures, with:
+Run the tests for the preflight gate, the tooling runner and the opencode plugin, and the purity rules against their fixtures, with:
 
 ```bash
 python3 -m unittest discover -s tests
 semgrep --test --config plugins/pr-validation/skills/pr-validation/rules/purity tests/semgrep/purity
 ```
 
-Integration tests skip when the tool they need is not installed.
+The unittest run includes the Node tests in `tests/opencode/` when Node is installed. Integration tests skip when the tool they need is not installed.
 
 ### The `pr-validation` Plugin
 
@@ -264,7 +290,7 @@ Where `xp-clean-code` governs how to build, `pr-validation` checks that what was
 
 #### Preflight Before Opening a Pull Request
 
-The same five analyses also run before a pull request exists. They take the diff from the local branch and the title and body from the draft the agent is about to submit, so an unsupported protection claim is removed before a reviewer reads it. Run `/pr-preflight` in Claude Code or Cursor, or `$pr-validation` with a preflight request in Codex (Codex plugins have no commands).
+The same five analyses also run before a pull request exists. They take the diff from the local branch and the title and body from the draft the agent is about to submit, so an unsupported protection claim is removed before a reviewer reads it. Run `/pr-preflight` in Claude Code, Cursor or opencode, or `$pr-validation` with a preflight request in Codex (Codex plugins have no commands).
 
 The plugin also ships a hook that runs the preflight whenever an agent tries to open a pull request. When an agent runs `gh pr create` (or `gh pr new`, or calls an MCP `create_pull_request` tool in Claude Code and Codex), the hook checks for a preflight record for the commit at `HEAD`. If none exists, it denies the call and tells the agent to run the preflight. The agent shows you the report and asks whether to proceed. It records the preflight under `.git/pr-preflight/` only after you confirm, then opens the pull request. A new commit needs a new preflight. The hook checks the repository the command runs in, following any `cd` earlier in the same command.
 
@@ -273,6 +299,7 @@ The plugin also ships a hook that runs the preflight whenever an agent tries to 
 | Claude Code | `hooks/hooks.json`, `PreToolUse` | Active once the plugin is enabled. |
 | Codex | `hooks/hooks.json`, `PreToolUse` (discovered by default) | Codex skips plugin hooks until you review and trust them with `/hooks`, and again after each change. |
 | Cursor | `hooks/hooks-cursor.json`, `beforeShellExecution` | Declared in the Cursor manifest. MCP tool calls are not gated. |
+| opencode | `opencode/index.js`, `tool.execute.before` | Registered when `pr-validation` is among the plugins. MCP tools named `*_create_pull_request` are gated. |
 
 The hook needs `python3` and `git` on the `PATH`. It fails open: outside a git repository, without git, or on unreadable input, the call proceeds. It does not see pull requests opened in a browser. To turn it off for one repository, run `git config pr-preflight.enabled false`.
 

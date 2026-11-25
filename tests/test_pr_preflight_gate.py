@@ -136,6 +136,43 @@ class InterceptsPayloads(unittest.TestCase):
         self.assertEqual(gate.intercept("claude", payload), gate.Unlocated())
 
 
+def opencode_payload(tool: str, args: dict[str, object], directory: str = "/repo") -> dict[str, object]:
+    """What the opencode plugin sends: the tool name, its arguments, and the session's directory."""
+    return {"tool": tool, "args": args, "directory": directory}
+
+
+class InterceptsOpencode(unittest.TestCase):
+    def test_bash_runs_in_the_session_directory(self) -> None:
+        payload = opencode_payload("bash", {"command": "gh pr create --fill"})
+        self.assertEqual(gate.intercept("opencode", payload), gate.PrCreation("/repo"))
+
+    def test_bash_runs_in_its_workdir(self) -> None:
+        absolute = opencode_payload("bash", {"command": "gh pr create", "workdir": "/other"})
+        relative = opencode_payload("bash", {"command": "gh pr create", "workdir": "sub"})
+        self.assertEqual(gate.intercept("opencode", absolute), gate.PrCreation("/other"))
+        self.assertEqual(gate.intercept("opencode", relative), gate.PrCreation("/repo/sub"))
+
+    def test_bash_follows_cd_from_its_workdir(self) -> None:
+        payload = opencode_payload("bash", {"command": "cd ../other && gh pr create", "workdir": "/work/repo"})
+        self.assertEqual(gate.intercept("opencode", payload), gate.PrCreation("/work/other"))
+        unresolvable = opencode_payload("bash", {"command": 'cd "$REPO" && gh pr create'})
+        self.assertEqual(gate.intercept("opencode", unresolvable), gate.Unlocated())
+
+    def test_mcp_tools_join_server_and_tool_with_one_underscore(self) -> None:
+        payload = opencode_payload("github_create_pull_request", {"title": "x"})
+        self.assertEqual(gate.intercept("opencode", payload), gate.PrCreation("/repo"))
+        for tool in ("github_create_pull_request_review", "github_list_pull_requests", "read"):
+            with self.subTest(tool=tool):
+                self.assertEqual(gate.intercept("opencode", opencode_payload(tool, {})), gate.Unrelated())
+
+    def test_unrelated_bash(self) -> None:
+        self.assertEqual(gate.intercept("opencode", opencode_payload("bash", {"command": "ls"})), gate.Unrelated())
+
+    def test_renders_a_deny_as_json_and_an_allow_as_nothing(self) -> None:
+        self.assertEqual(json.loads(gate.render("opencode", gate.Deny("why"))), {"permission": "deny", "reason": "why"})
+        self.assertEqual(gate.render("opencode", gate.Allow()), "")
+
+
 class Decides(unittest.TestCase):
     def test_denies_without_record(self) -> None:
         decision = gate.decide(gate.RepositoryState("a" * 40, preflight_recorded=False, gate_disabled=False))
@@ -226,6 +263,14 @@ class EndToEnd(unittest.TestCase):
         self.assertEqual(json.loads(self.run_gate("cursor", payload))["permission"], "deny")
         self.record_preflight()
         self.assertEqual(json.loads(self.run_gate("cursor", payload))["permission"], "allow")
+
+    def test_opencode_denies_then_allows_after_record(self) -> None:
+        payload = opencode_payload("bash", {"command": "gh pr create --fill"}, directory=self.repo)
+        denied = json.loads(self.run_gate("opencode", payload))
+        self.assertEqual(denied["permission"], "deny")
+        self.assertIn("preflight-workflow.md", denied["reason"])
+        self.record_preflight()
+        self.assertEqual(self.run_gate("opencode", payload), "")
 
     def test_checks_the_repository_the_command_changes_into(self) -> None:
         other = tempfile.TemporaryDirectory()
